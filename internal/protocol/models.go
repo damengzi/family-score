@@ -171,12 +171,50 @@ type CreateUserParam struct {
 	ChildID     int64  `json:"childId"`
 }
 
+// UpdateUserParam 表示管理员修改用户参数。
+type UpdateUserParam struct {
+	DisplayName string `json:"displayName"`
+	Password    string `json:"password"`
+	ChildID     int64  `json:"childId"`
+}
+
 // CreateChildParam 表示新增孩子档案参数。
 type CreateChildParam struct {
+	Name           string `json:"name"`
+	Age            int    `json:"age"`
+	Gender         string `json:"gender"`
+	ParentUserID   int64  `json:"parentUserId"`
+	ChildLoginName string `json:"childLoginName"`
+	ChildPassword  string `json:"childPassword"`
+}
+
+// UpdateChildParam 表示修改孩子档案参数。
+type UpdateChildParam struct {
 	Name         string `json:"name"`
 	Age          int    `json:"age"`
 	Gender       string `json:"gender"`
 	ParentUserID int64  `json:"parentUserId"`
+}
+
+// PasswordCaptchaChoice 表示重置密码图片验证码选项。
+type PasswordCaptchaChoice struct {
+	Key   string `json:"key"`
+	Image string `json:"image"`
+}
+
+// PasswordCaptcha 表示重置密码图片验证码。
+type PasswordCaptcha struct {
+	Token   string                  `json:"token"`
+	Prompt  string                  `json:"prompt"`
+	Choices []PasswordCaptchaChoice `json:"choices"`
+}
+
+// ResetPasswordParam 表示忘记密码重置参数。
+type ResetPasswordParam struct {
+	LoginName     string `json:"loginName"`
+	Password      string `json:"password"`
+	CaptchaToken  string `json:"captchaToken"`
+	CaptchaAnswer string `json:"captchaAnswer"`
 }
 
 // SelfRegisterParam 表示自主注册普通用户参数。

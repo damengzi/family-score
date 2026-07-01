@@ -76,6 +76,24 @@ func (c *Controller) Login(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"user": sess})
 }
 
+// PasswordCaptcha 获取忘记密码图片验证码。
+func (c *Controller) PasswordCaptcha(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, c.svc.PasswordCaptcha())
+}
+
+// ResetPassword 通过图片验证码重置密码。
+func (c *Controller) ResetPassword(w http.ResponseWriter, r *http.Request) {
+	var req protocol.ResetPasswordParam
+	if !readJSON(w, r, &req) {
+		return
+	}
+	if err := c.svc.ResetPassword(r.Context(), req); err != nil {
+		errorJSON(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
 // AuthMe 查询当前登录用户。
 func (c *Controller) AuthMe(w http.ResponseWriter, _ *http.Request, sess protocol.Session) {
 	writeJSON(w, http.StatusOK, map[string]any{"user": sess})
@@ -103,6 +121,20 @@ func (c *Controller) CreateUser(w http.ResponseWriter, r *http.Request, sess pro
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"id": id})
+}
+
+// UpdateUser 修改用户。
+func (c *Controller) UpdateUser(w http.ResponseWriter, r *http.Request, sess protocol.Session, id int64) {
+	var req protocol.UpdateUserParam
+	if !readJSON(w, r, &req) {
+		return
+	}
+	user, err := c.svc.UpdateUser(r.Context(), sess, id, req)
+	if err != nil {
+		errorJSON(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"user": user})
 }
 
 // DeleteUser 注销用户。
@@ -160,6 +192,29 @@ func (c *Controller) CreateChild(w http.ResponseWriter, r *http.Request, sess pr
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"id": id})
+}
+
+// UpdateChild 修改孩子档案。
+func (c *Controller) UpdateChild(w http.ResponseWriter, r *http.Request, sess protocol.Session, id int64) {
+	var req protocol.UpdateChildParam
+	if !readJSON(w, r, &req) {
+		return
+	}
+	child, err := c.svc.UpdateChild(r.Context(), sess, id, req)
+	if err != nil {
+		errorJSON(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"child": child})
+}
+
+// DeleteChild 删除孩子档案。
+func (c *Controller) DeleteChild(w http.ResponseWriter, r *http.Request, sess protocol.Session, id int64) {
+	if err := c.svc.DeleteChild(r.Context(), sess, id); err != nil {
+		errorJSON(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
 // Dashboard 查询首页看板。

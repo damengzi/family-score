@@ -54,7 +54,7 @@ async function boot() {
 async function loadHome() {
   const children = await api('/api/children');
   state.children = children.children || [];
-  state.childId = state.childId || state.children[0]?.id;
+  if (!state.children.some(c => c.id === state.childId)) state.childId = state.children[0]?.id || null;
   await loadAll();
 }
 
@@ -64,8 +64,10 @@ async function loadAll() {
     api('/api/rewards').then(data => result.rewards = data.rewards || []),
     api('/api/exchange-orders').then(data => result.exchangeOrders = data.exchangeOrders || []),
   ];
-  if (canOperate()) reqs.push(api('/api/task-templates').then(data => result.taskTemplates = data.taskTemplates || []));
-  if (isAdmin()) reqs.push(api('/api/users').then(data => result.users = data.users || []));
+  if (canOperate()) {
+    reqs.push(api('/api/task-templates').then(data => result.taskTemplates = data.taskTemplates || []));
+    reqs.push(api('/api/users').then(data => result.users = data.users || []));
+  }
   if (state.childId) {
     reqs.push(api(`/api/children/${state.childId}/dashboard`).then(data => result.dashboard = data));
     reqs.push(api(`/api/children/${state.childId}/score-records`).then(data => result.records = data.records || []));
@@ -75,9 +77,7 @@ async function loadAll() {
   state.exchangeOrders = result.exchangeOrders || [];
   state.taskTemplates = result.taskTemplates || [];
   state.users = result.users || [];
-  if (state.childId) {
-    state.dashboard = result.dashboard;
-    state.records = result.records || [];
-  }
+  state.dashboard = result.dashboard || null;
+  state.records = result.records || [];
   renderApp();
 }

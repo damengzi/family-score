@@ -23,15 +23,16 @@ import (
 
 // Service 表示服务层，负责业务规则编排。
 type Service struct {
-	repo     *repository.Repository
-	sessions map[string]protocol.Session
-	mu       sync.Mutex
+	repo             *repository.Repository
+	sessions         map[string]protocol.Session
+	passwordCaptchas map[string]passwordCaptchaSession
+	mu               sync.Mutex
 }
 
 // New 创建服务层实例。
 func New(repo *repository.Repository) *Service {
 	logger.L().Info("服务层初始化完成")
-	return &Service{repo: repo, sessions: map[string]protocol.Session{}}
+	return &Service{repo: repo, sessions: map[string]protocol.Session{}, passwordCaptchas: map[string]passwordCaptchaSession{}}
 }
 
 // Close 关闭服务依赖资源。
@@ -173,25 +174,6 @@ func (s *Service) EnsureBuiltinAdmin(ctx context.Context) error {
 	return err
 }
 
-// Login 执行本机账号登录。
-func (s *Service) Login(ctx context.Context, loginName, password string) (string, protocol.Session, error) {
-	logger.L().Info("用户尝试登录", zap.String("login_name", loginName))
-	var user protocol.User
-	var hash string
-	err := s.repo.DB.QueryRowContext(ctx, `SELECT id, family_id, COALESCE(child_id, 0), role, login_name, display_name, password_hash FROM users WHERE login_name = ? AND enabled = 1`, strings.TrimSpace(loginName)).Scan(&user.ID, &user.FamilyID, &user.ChildID, &user.Role, &user.LoginName, &user.Name, &hash)
-	if err != nil || bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)) != nil {
-		logger.L().Warn("用户登录失败", zap.String("login_name", loginName), zap.Error(err))
-		return "", protocol.Session{}, errors.New("账号或密码错误")
-	}
-	token := utils.RandomToken()
-	sess := protocol.Session{UserID: user.ID, FamilyID: user.FamilyID, ChildID: user.ChildID, Role: user.Role, Name: user.Name, ExpiresAt: time.Now().Add(12 * time.Hour)}
-	s.mu.Lock()
-	s.sessions[token] = sess
-	s.mu.Unlock()
-	logger.L().Info("用户登录成功", zap.Int64("user_id", user.ID), zap.Int64("family_id", user.FamilyID), zap.String("role", user.Role))
-	return token, sess, nil
-}
-
 // Logout 清除本机会话。
 func (s *Service) Logout(token string) {
 	s.mu.Lock()
@@ -209,12 +191,17 @@ func CanOperate(sess protocol.Session) bool {
 	return sess.Role == consts.RoleAdmin || sess.Role == consts.RoleParent
 }
 
-// Users 查询家庭用户列表，仅管理员可用。
+// Users 查询家庭用户列表，管理员可查看全部，家长可查看可归属的家长账号。
 func (s *Service) Users(ctx context.Context, sess protocol.Session) ([]protocol.User, error) {
-	if !IsAdmin(sess) {
-		return nil, errors.New("只有管理员可以查看用户")
+	if !CanOperate(sess) {
+		return nil, errors.New("只有管理员或家长可以查看用户")
 	}
-	rows, err := s.repo.DB.QueryContext(ctx, `SELECT id, family_id, COALESCE(child_id, 0), role, login_name, display_name, enabled, created_at FROM users WHERE family_id = ? ORDER BY id DESC`, sess.FamilyID)
+	query := `SELECT id, family_id, COALESCE(child_id, 0), role, login_name, display_name, enabled, created_at FROM users WHERE family_id = ? ORDER BY id DESC`
+	args := []any{sess.FamilyID}
+	if sess.Role == consts.RoleParent {
+		query = `SELECT id, family_id, COALESCE(child_id, 0), role, login_name, display_name, enabled, created_at FROM users WHERE family_id = ? AND role = 'PARENT' AND enabled = 1 ORDER BY id DESC`
+	}
+	rows, err := s.repo.DB.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -332,45 +319,6 @@ func (s *Service) Children(ctx context.Context, sess protocol.Session) ([]protoc
 		}
 	}
 	return children, nil
-}
-
-// CreateChild 创建孩子档案并归属到家长。
-func (s *Service) CreateChild(ctx context.Context, sess protocol.Session, req CreateChildParam) (int64, error) {
-	if !CanOperate(sess) {
-		return 0, errors.New("只有管理员或家长可以添加孩子")
-	}
-	req.Name = strings.TrimSpace(req.Name)
-	req.Gender = strings.ToUpper(strings.TrimSpace(req.Gender))
-	if req.Name == "" || req.Age <= 0 {
-		return 0, errors.New("孩子姓名和年龄不能为空")
-	}
-	if req.Gender == "" {
-		req.Gender = "BOY"
-	}
-	parentUserID := sess.UserID
-	if IsAdmin(sess) {
-		if req.ParentUserID <= 0 {
-			return 0, errors.New("管理员添加孩子时必须选择归属家长")
-		}
-		var count int
-		if err := s.repo.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM users WHERE id = ? AND family_id = ? AND role = 'PARENT' AND enabled = 1`, req.ParentUserID, sess.FamilyID).Scan(&count); err != nil {
-			return 0, err
-		}
-		if count == 0 {
-			return 0, errors.New("归属家长不存在或未启用")
-		}
-		parentUserID = req.ParentUserID
-	}
-	res, err := s.repo.DB.ExecContext(ctx, `INSERT INTO children(family_id, parent_user_id, name, age, gender, profile_note) VALUES(?, ?, ?, ?, ?, ?)`, sess.FamilyID, parentUserID, req.Name, req.Age, req.Gender, "家长名下孩子档案")
-	if err != nil {
-		return 0, err
-	}
-	childID, _ := res.LastInsertId()
-	if _, err := s.repo.DB.ExecContext(ctx, `INSERT INTO score_accounts(child_id, current_month) VALUES(?, ?)`, childID, utils.CurrentMonth()); err != nil {
-		return 0, err
-	}
-	logger.L().Info("新增孩子档案", zap.Int64("child_id", childID), zap.Int64("parent_user_id", parentUserID), zap.Int64("operator_id", sess.UserID))
-	return childID, nil
 }
 
 // Dashboard 查询首页聚合数据。

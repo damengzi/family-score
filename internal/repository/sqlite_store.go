@@ -61,7 +61,7 @@ func (r *Repository) Migrate(ctx context.Context) error {
 	stmts := []string{
 		`CREATE TABLE IF NOT EXISTS schema_migrations (version VARCHAR(64) PRIMARY KEY, description VARCHAR(256) NOT NULL DEFAULT '', applied_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP);`,
 		`CREATE TABLE IF NOT EXISTS families (id INTEGER PRIMARY KEY AUTOINCREMENT, name VARCHAR(128) NOT NULL, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP);`,
-		`CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, family_id INTEGER NOT NULL, child_id INTEGER NULL, display_name VARCHAR(64) NOT NULL, role VARCHAR(32) NOT NULL, login_name VARCHAR(64) NOT NULL UNIQUE, password_hash VARCHAR(256) NOT NULL, enabled INTEGER NOT NULL DEFAULT 1, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP);`,
+		`CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, family_id INTEGER NOT NULL, child_id INTEGER NULL, display_name VARCHAR(64) NOT NULL, role VARCHAR(32) NOT NULL, login_name VARCHAR(64) NOT NULL UNIQUE, password_hash VARCHAR(256) NOT NULL, enabled INTEGER NOT NULL DEFAULT 1, failed_login_date VARCHAR(10) NOT NULL DEFAULT '', failed_login_count INTEGER NOT NULL DEFAULT 0, locked_until TIMESTAMP NULL, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP);`,
 		`CREATE TABLE IF NOT EXISTS children (id INTEGER PRIMARY KEY AUTOINCREMENT, family_id INTEGER NOT NULL, parent_user_id INTEGER NULL, name VARCHAR(64) NOT NULL, age INTEGER NOT NULL, gender VARCHAR(16) NOT NULL, profile_note VARCHAR(512) NOT NULL DEFAULT '', created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP);`,
 		`CREATE TABLE IF NOT EXISTS score_accounts (id INTEGER PRIMARY KEY AUTOINCREMENT, child_id INTEGER NOT NULL, base_score INTEGER NOT NULL DEFAULT 100, bonus_score INTEGER NOT NULL DEFAULT 0, star_count INTEGER NOT NULL DEFAULT 0, team_score INTEGER NOT NULL DEFAULT 0, status_level VARCHAR(32) NOT NULL DEFAULT 'GREEN', current_month VARCHAR(7) NOT NULL, last_exchange_date DATE NULL, appeal_count_this_week INTEGER NOT NULL DEFAULT 0, version INTEGER NOT NULL DEFAULT 0, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, UNIQUE(child_id, current_month));`,
 		`CREATE TABLE IF NOT EXISTS score_records (id INTEGER PRIMARY KEY AUTOINCREMENT, child_id INTEGER NOT NULL, account_id INTEGER NOT NULL, record_type VARCHAR(32) NOT NULL, target_account VARCHAR(32) NOT NULL, item_name VARCHAR(128) NOT NULL, score_change INTEGER NOT NULL, before_value INTEGER NOT NULL, after_value INTEGER NOT NULL, operator_role VARCHAR(32) NOT NULL, operator_id INTEGER NULL, reason VARCHAR(512) NOT NULL, evidence VARCHAR(1024) NOT NULL DEFAULT '', confirm_status VARCHAR(32) NOT NULL DEFAULT 'CONFIRMED', occurred_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP);`,
@@ -88,6 +88,15 @@ func (r *Repository) Migrate(ctx context.Context) error {
 		return err
 	}
 	if err := addColumnIfMissing(ctx, r.DB, "children", "parent_user_id", "INTEGER NULL"); err != nil {
+		return err
+	}
+	if err := addColumnIfMissing(ctx, r.DB, "users", "failed_login_date", "VARCHAR(10) NOT NULL DEFAULT ''"); err != nil {
+		return err
+	}
+	if err := addColumnIfMissing(ctx, r.DB, "users", "failed_login_count", "INTEGER NOT NULL DEFAULT 0"); err != nil {
+		return err
+	}
+	if err := addColumnIfMissing(ctx, r.DB, "users", "locked_until", "TIMESTAMP NULL"); err != nil {
 		return err
 	}
 	if err := normalizeDefaultTaskScores(ctx, r.DB); err != nil {

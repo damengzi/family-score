@@ -101,6 +101,14 @@ func dispatchAPI(ctrl *controller.Controller, c *gin.Context) {
 		ctrl.Login(w, r)
 		return
 	}
+	if path == "auth/password-captcha" && r.Method == http.MethodGet {
+		ctrl.PasswordCaptcha(w, r)
+		return
+	}
+	if path == "auth/reset-password" && r.Method == http.MethodPost {
+		ctrl.ResetPassword(w, r)
+		return
+	}
 
 	sess, ok := ctrl.RequireSession(w, r)
 	if !ok {
@@ -116,12 +124,18 @@ func dispatchAPI(ctrl *controller.Controller, c *gin.Context) {
 		ctrl.Users(w, r, sess)
 	case path == "users" && r.Method == http.MethodPost:
 		ctrl.CreateUser(w, r, sess)
+	case len(parts) == 2 && parts[0] == "users" && r.Method == http.MethodPatch:
+		ctrl.UpdateUser(w, r, sess, parseID(parts[1]))
 	case len(parts) == 2 && parts[0] == "users" && r.Method == http.MethodDelete:
 		ctrl.DeleteUser(w, r, sess, parseID(parts[1]))
 	case path == "children" && r.Method == http.MethodGet:
 		ctrl.Children(w, r, sess)
 	case path == "children" && r.Method == http.MethodPost:
 		ctrl.CreateChild(w, r, sess)
+	case len(parts) == 2 && parts[0] == "children" && r.Method == http.MethodPatch:
+		ctrl.UpdateChild(w, r, sess, parseID(parts[1]))
+	case len(parts) == 2 && parts[0] == "children" && r.Method == http.MethodDelete:
+		ctrl.DeleteChild(w, r, sess, parseID(parts[1]))
 	case len(parts) == 3 && parts[0] == "children" && parts[2] == "dashboard" && r.Method == http.MethodGet:
 		ctrl.Dashboard(w, r, sess, parseID(parts[1]))
 	case len(parts) == 3 && parts[0] == "children" && parts[2] == "score-records" && r.Method == http.MethodGet:
