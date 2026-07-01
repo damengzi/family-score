@@ -1,0 +1,258 @@
+package protocol
+
+import "time"
+
+// Session 表示本机登录会话。
+type Session struct {
+	UserID    int64     `json:"userId"`
+	FamilyID  int64     `json:"familyId"`
+	ChildID   int64     `json:"childId"`
+	Role      string    `json:"role"`
+	Name      string    `json:"name"`
+	ExpiresAt time.Time `json:"expiresAt"`
+}
+
+// User 表示本机用户账号。
+type User struct {
+	ID        int64  `json:"id"`
+	FamilyID  int64  `json:"familyId"`
+	ChildID   int64  `json:"childId"`
+	Role      string `json:"role"`
+	LoginName string `json:"loginName"`
+	Name      string `json:"name"`
+	Enabled   bool   `json:"enabled"`
+	CreatedAt string `json:"createdAt"`
+}
+
+// Child 表示孩子档案。
+type Child struct {
+	ID           int64  `json:"id"`
+	FamilyID     int64  `json:"familyId"`
+	ParentUserID int64  `json:"parentUserId"`
+	Name         string `json:"name"`
+	Age          int    `json:"age"`
+	Gender       string `json:"gender"`
+}
+
+// Account 表示孩子当前月份的积分账户。
+type Account struct {
+	ID                  int64  `json:"id"`
+	ChildID             int64  `json:"childId"`
+	BaseScore           int    `json:"baseScore"`
+	BonusScore          int    `json:"bonusScore"`
+	StarCount           int    `json:"starCount"`
+	TeamScore           int    `json:"teamScore"`
+	StatusLevel         string `json:"statusLevel"`
+	CurrentMonth        string `json:"currentMonth"`
+	LastExchangeDate    string `json:"lastExchangeDate"`
+	AppealCountThisWeek int    `json:"appealCountThisWeek"`
+	Version             int    `json:"version"`
+}
+
+// ScoreRecord 表示一条积分账户变更流水。
+type ScoreRecord struct {
+	ID            int64  `json:"id"`
+	ChildID       int64  `json:"childId"`
+	RecordType    string `json:"recordType"`
+	TargetAccount string `json:"targetAccount"`
+	ItemName      string `json:"itemName"`
+	ScoreChange   int    `json:"scoreChange"`
+	BeforeValue   int    `json:"beforeValue"`
+	AfterValue    int    `json:"afterValue"`
+	OperatorRole  string `json:"operatorRole"`
+	Reason        string `json:"reason"`
+	Evidence      string `json:"evidence"`
+	ConfirmStatus string `json:"confirmStatus"`
+	OccurredAt    string `json:"occurredAt"`
+}
+
+// TaskInstance 表示某一天生成给孩子的任务实例。
+type TaskInstance struct {
+	ID            int64  `json:"id"`
+	ChildID       int64  `json:"childId"`
+	TemplateID    int64  `json:"templateId"`
+	TaskName      string `json:"taskName"`
+	TaskType      string `json:"taskType"`
+	Category      string `json:"category"`
+	ScoreValue    int    `json:"scoreValue"`
+	TargetAccount string `json:"targetAccount"`
+	Status        string `json:"status"`
+	SubmitNote    string `json:"submitNote"`
+	AuditNote     string `json:"auditNote"`
+	TaskDate      string `json:"taskDate"`
+}
+
+// TaskTemplate 表示可配置任务模板。
+type TaskTemplate struct {
+	ID                int64  `json:"id"`
+	TaskName          string `json:"taskName"`
+	TaskType          string `json:"taskType"`
+	Category          string `json:"category"`
+	ScoreValue        int    `json:"scoreValue"`
+	TargetAccount     string `json:"targetAccount"`
+	NeedParentConfirm bool   `json:"needParentConfirm"`
+	DailyLimit        int    `json:"dailyLimit"`
+	WeeklyLimit       int    `json:"weeklyLimit"`
+	Enabled           bool   `json:"enabled"`
+	Description       string `json:"description"`
+}
+
+// Reward 表示可兑换奖励配置。
+type Reward struct {
+	ID                int64  `json:"id"`
+	RewardName        string `json:"rewardName"`
+	RewardType        string `json:"rewardType"`
+	CostScore         int    `json:"costScore"`
+	CostStar          int    `json:"costStar"`
+	WeeklyLimit       int    `json:"weeklyLimit"`
+	MonthlyLimit      int    `json:"monthlyLimit"`
+	HealthRisk        string `json:"healthRisk"`
+	NeedParentConfirm bool   `json:"needParentConfirm"`
+	Enabled           bool   `json:"enabled"`
+	Description       string `json:"description"`
+}
+
+// ExchangeOrder 表示奖励兑换申请。
+type ExchangeOrder struct {
+	ID         int64  `json:"id"`
+	ChildID    int64  `json:"childId"`
+	RewardID   int64  `json:"rewardId"`
+	RewardName string `json:"rewardName"`
+	CostScore  int    `json:"costScore"`
+	CostStar   int    `json:"costStar"`
+	Status     string `json:"status"`
+	ApplyNote  string `json:"applyNote"`
+	AuditNote  string `json:"auditNote"`
+	AppliedAt  string `json:"appliedAt"`
+}
+
+// Dashboard 表示孩子首页聚合数据。
+type Dashboard struct {
+	Account Account        `json:"account"`
+	Records []ScoreRecord  `json:"records"`
+	Tasks   []TaskInstance `json:"tasks"`
+}
+
+// BackupRecord 表示本地备份记录。
+type BackupRecord struct {
+	ID            int64  `json:"id"`
+	OperationType string `json:"operationType"`
+	FilePath      string `json:"filePath"`
+	FileSize      int64  `json:"fileSize"`
+	Status        string `json:"status"`
+	Remark        string `json:"remark"`
+	CreatedAt     string `json:"createdAt"`
+}
+
+// SystemStatusParam 表示系统状态。
+type SystemStatusParam struct {
+	SetupCompleted bool   `json:"setupCompleted"`
+	DataDir        string `json:"dataDir"`
+	DBPath         string `json:"dbPath"`
+	Addr           string `json:"addr"`
+	Now            string `json:"now"`
+}
+
+// SetupInitParam 表示首次初始化参数。
+type SetupInitParam struct {
+	ParentName string `json:"parentName"`
+	LoginName  string `json:"loginName"`
+	Password   string `json:"password"`
+	ChildName  string `json:"childName"`
+	ChildAge   int    `json:"childAge"`
+}
+
+// CreateUserParam 表示管理员新增用户参数。
+type CreateUserParam struct {
+	DisplayName string `json:"displayName"`
+	LoginName   string `json:"loginName"`
+	Password    string `json:"password"`
+	Role        string `json:"role"`
+	ChildID     int64  `json:"childId"`
+}
+
+// CreateChildParam 表示新增孩子档案参数。
+type CreateChildParam struct {
+	Name         string `json:"name"`
+	Age          int    `json:"age"`
+	Gender       string `json:"gender"`
+	ParentUserID int64  `json:"parentUserId"`
+}
+
+// SelfRegisterParam 表示自主注册普通用户参数。
+type SelfRegisterParam struct {
+	DisplayName string `json:"displayName"`
+	LoginName   string `json:"loginName"`
+	Password    string `json:"password"`
+}
+
+// CreateScoreRecordParam 表示手动记分参数。
+type CreateScoreRecordParam struct {
+	ChildID       int64  `json:"childId"`
+	RecordType    string `json:"recordType"`
+	TargetAccount string `json:"targetAccount"`
+	ItemName      string `json:"itemName"`
+	ScoreChange   int    `json:"scoreChange"`
+	Reason        string `json:"reason"`
+	Evidence      string `json:"evidence"`
+}
+
+// SubmitTaskParam 表示任务提交参数。
+type SubmitTaskParam struct {
+	SubmitNote string `json:"submitNote"`
+}
+
+// AuditParam 表示审核参数。
+type AuditParam struct {
+	Result    string `json:"result"`
+	AuditNote string `json:"auditNote"`
+}
+
+// CreateTaskTemplateParam 表示新增任务模板参数。
+type CreateTaskTemplateParam struct {
+	TaskName      string `json:"taskName"`
+	TaskType      string `json:"taskType"`
+	Category      string `json:"category"`
+	ScoreValue    int    `json:"scoreValue"`
+	TargetAccount string `json:"targetAccount"`
+	Description   string `json:"description"`
+}
+
+// CreateRewardParam 表示新增奖励参数。
+type CreateRewardParam struct {
+	RewardName   string `json:"rewardName"`
+	RewardType   string `json:"rewardType"`
+	CostScore    int    `json:"costScore"`
+	CostStar     int    `json:"costStar"`
+	WeeklyLimit  int    `json:"weeklyLimit"`
+	MonthlyLimit int    `json:"monthlyLimit"`
+	HealthRisk   string `json:"healthRisk"`
+	Description  string `json:"description"`
+}
+
+// CreateExchangeOrderParam 表示兑换申请参数。
+type CreateExchangeOrderParam struct {
+	ChildID  int64  `json:"childId"`
+	RewardID int64  `json:"rewardId"`
+	Note     string `json:"note"`
+}
+
+// ApplyScoreChangeParam 表示一次账户分值变更所需参数。
+type ApplyScoreChangeParam struct {
+	// ChildID 孩子 ID。
+	ChildID int64
+	// RecordType 明细类型：ADD / DEDUCT / REPAIR / EXCHANGE / STAR / TEAM。
+	RecordType string
+	// TargetAccount 目标账户：AUTO / BASE / BONUS / STAR / TEAM。
+	TargetAccount string
+	// ItemName 项目名称。
+	ItemName string
+	// ScoreChange 分值变化，外部可传正数或负数，内部按类型归一化。
+	ScoreChange int
+	// Reason 变更原因。
+	Reason string
+	// Evidence 本地证据路径或说明。
+	Evidence string
+	// Operator 操作人。
+	Operator Session
+}

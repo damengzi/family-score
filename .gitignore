@@ -1,0 +1,25 @@
+# macOS
+.DS_Store
+
+# Go
+*.exe
+*.test
+*.out
+/bin/
+/dist/
+
+# Local runtime data
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+logs/
+*.log
+*.pid
+
+# IDE / agent local data
+.codebuddy/
+
+# Temp
+tmp/
+.temp/
