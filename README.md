@@ -5,6 +5,18 @@
 ## 启动
 
 ```bash
+make run
+```
+
+仅构建可执行文件：
+
+```bash
+make build
+```
+
+也可以直接使用 Go 命令运行：
+
+```bash
 go run .
 ```
 
