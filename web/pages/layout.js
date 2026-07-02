@@ -1,13 +1,13 @@
 function renderApp() {
-  if (!canOperate() && ['score', 'childConfig', 'taskConfig', 'rewardConfig', 'users', 'system'].includes(state.tab)) state.tab = 'detail';
-  if (!isAdmin() && state.tab === 'users') state.tab = 'detail';
+  if (!canOperate() && ['score', 'childConfig', 'taskConfig', 'rewardConfig'].includes(state.tab)) state.tab = 'detail';
+  if (!isAdmin() && ['users', 'system'].includes(state.tab)) state.tab = 'detail';
   const acc = state.dashboard?.account || {};
   const childOptions = state.children.map(c => `<option value="${c.id}" ${c.id === state.childId ? 'selected' : ''}>${h(c.name)} ${c.age}岁</option>`).join('');
-  const operateTabs = canOperate() ? `${tabBtn('childConfig','孩子管理')}${tabBtn('taskConfig','任务自定义')}${tabBtn('rewardConfig','奖励/零食自定义')}${tabBtn('system','本机备份')}` : '';
-  const adminTabs = isAdmin() ? `${tabBtn('users','用户管理')}` : '';
+  const operateTabs = canOperate() ? `${tabBtn('childConfig','孩子管理')}${tabBtn('taskConfig','任务自定义')}${tabBtn('rewardConfig','奖励/零食自定义')}` : '';
+  const adminTabs = isAdmin() ? `${tabBtn('users','用户管理')}${tabBtn('system','本机备份')}` : '';
   app.innerHTML = `<div class="layout">
     <div class="hero">
-      <div><h1>家庭德育积分系统</h1><p>积分明细 · 加扣分 · 惩罚修复 · 任务配置 · 奖励兑换 · 本机备份</p></div>
+      <div><h1>家庭德育积分系统</h1><p>积分明细 · 加扣分 · 惩罚修复 · 任务配置 · 奖励兑换 · 本机备份</p><span class="role-note">${h(roleIntro())}</span></div>
       <div class="row"><span class="tag ${isAdmin() ? 'green' : 'blue'}">${roleName(state.me?.role)}</span><span class="tag">当前用户：${h(state.me?.name || '-')}</span><select id="childSelect">${childOptions}</select><button class="secondary" id="logoutBtn">退出</button></div>
     </div>
     <div class="grid">

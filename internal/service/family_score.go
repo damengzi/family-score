@@ -652,7 +652,10 @@ func (s *Service) Backup(ctx context.Context, sess protocol.Session) (string, in
 }
 
 // Backups 查询本地备份记录。
-func (s *Service) Backups(ctx context.Context) ([]protocol.BackupRecord, error) {
+func (s *Service) Backups(ctx context.Context, sess protocol.Session) ([]protocol.BackupRecord, error) {
+	if !IsAdmin(sess) {
+		return nil, errors.New("只有管理员可以查看备份记录")
+	}
 	rows, err := s.repo.DB.QueryContext(ctx, `SELECT id, operation_type, file_path, file_size, status, remark, created_at FROM backup_records ORDER BY id DESC LIMIT 50`)
 	if err != nil {
 		return nil, err

@@ -169,7 +169,7 @@ func dispatchAPI(ctrl *controller.Controller, c *gin.Context) {
 	case path == "system/backup" && r.Method == http.MethodPost:
 		ctrl.Backup(w, r, sess)
 	case path == "system/backups" && r.Method == http.MethodGet:
-		ctrl.Backups(w, r)
+		ctrl.Backups(w, r, sess)
 	default:
 		c.JSON(http.StatusNotFound, gin.H{"error": "接口不存在"})
 	}

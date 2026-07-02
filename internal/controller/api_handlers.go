@@ -403,10 +403,10 @@ func (c *Controller) Backup(w http.ResponseWriter, r *http.Request, sess protoco
 }
 
 // Backups 查询备份记录。
-func (c *Controller) Backups(w http.ResponseWriter, r *http.Request) {
-	backups, err := c.svc.Backups(r.Context())
+func (c *Controller) Backups(w http.ResponseWriter, r *http.Request, sess protocol.Session) {
+	backups, err := c.svc.Backups(r.Context(), sess)
 	if err != nil {
-		errorJSON(w, http.StatusInternalServerError, err.Error())
+		errorJSON(w, http.StatusForbidden, err.Error())
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"backups": backups})
