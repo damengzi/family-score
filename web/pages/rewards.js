@@ -17,11 +17,11 @@ function rewardCostText(r) {
 }
 
 function rewardTypeName(type) {
-  return ({SNACK:'零食',DRINK:'饮品',BOOK:'图书',TOY:'玩具',ACTIVITY:'活动',PRIVILEGE:'特权'}[type] || type || '奖励');
+  return tr(`rewardType.${type || 'REWARD'}`, ({SNACK:'零食',DRINK:'饮品',BOOK:'图书',TOY:'玩具',ACTIVITY:'活动',PRIVILEGE:'特权'}[type] || type || '奖励'));
 }
 
 function riskName(risk) {
-  return ({NONE:'健康推荐',LOW:'低风险',MEDIUM:'适量',HIGH:'谨慎'}[risk] || risk || '未标记');
+  return tr(`risk.${risk || 'UNKNOWN'}`, ({NONE:'健康推荐',LOW:'低风险',MEDIUM:'适量',HIGH:'谨慎'}[risk] || risk || '未标记'));
 }
 
 function renderRewardConfig() {

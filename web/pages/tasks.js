@@ -28,11 +28,11 @@ function taskActions(t) {
 }
 
 function taskStatusText(status) {
-  return ({TODO:'待挑战',SUBMITTED:'等待确认',APPROVED:'已点亮',REJECTED:'再试一次'}[status] || status);
+  return tr(`taskStatus.${status}`, ({TODO:'待挑战',SUBMITTED:'等待确认',APPROVED:'已点亮',REJECTED:'再试一次'}[status] || status));
 }
 
 function taskCategoryName(category) {
-  return ({STUDY:'学习',SELF_CARE:'自理',HOUSEWORK:'家务',EMOTION:'情绪',HEALTH:'健康',SAFETY:'安全'}[category] || category || '成长');
+  return tr(`taskCategory.${category || 'GROWTH'}`, ({STUDY:'学习',SELF_CARE:'自理',HOUSEWORK:'家务',EMOTION:'情绪',HEALTH:'健康',SAFETY:'安全'}[category] || category || '成长'));
 }
 
 function taskTone(status) {

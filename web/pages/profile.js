@@ -6,7 +6,7 @@ function renderProfile() {
   const pendingOrders = state.exchangeOrders.filter(o => o.status === 'PENDING' && (!state.childId || Number(o.childId) === Number(state.childId))).length;
   return `<div class="stack">
     <div class="card overview-hero-card profile-hero">
-      <div><div class="eyebrow">${h(profileText('个人主页','Profile'))}</div><h2>${h(profileText(`${user.name || state.me?.name || '我的账号'}，欢迎回来`, `Welcome, ${user.name || state.me?.name || 'User'}`))}</h2><p>${h(profileText('这里可以查看账号信息、设置主题语言、修改密码，并快速了解自己的家庭积分使用状态。','View account information, preferences, password security, and your family score activity.'))}</p></div>
+      <div><div class="eyebrow">${h(profileText('个人主页','Profile'))}</div><h2>${h(profileText(`${displayName(user.name || state.me?.name) || '我的账号'}，欢迎回来`, `Welcome, ${displayName(user.name || state.me?.name) || 'User'}`))}</h2><p>${h(profileText('这里可以查看账号信息、设置主题语言、修改密码，并快速了解自己的家庭积分使用状态。','View account information, preferences, password security, and your family score activity.'))}</p></div>
       <div class="overview-actions"><button class="secondary" data-tab="overview">${tr('overview','今日概览')}</button><button class="secondary" data-tab="growthReport">${tr('growthReport','成长报告')}</button></div>
     </div>
 
@@ -40,14 +40,22 @@ function profileText(zh, en) {
 
 function profileInfo(user, profile) {
   const rows = [
-    [profileText('显示名称','Display name'), user.name || state.me?.name || '-'],
+    [profileText('显示名称','Display name'), displayName(user.name || state.me?.name)],
     [profileText('登录名','Login name'), user.loginName || '-'],
     [profileText('角色','Role'), roleName(user.role || state.me?.role)],
     [profileText('绑定孩子','Bound child'), profile.boundChildName || (user.childId ? `ID ${user.childId}` : profileText('未绑定','Not bound'))],
-    [profileText('创建时间','Created at'), user.createdAt || '-'],
-    [profileText('登录有效期','Session expires'), profile.sessionExpiresAt || '-'],
+    [profileText('创建时间','Created at'), formatProfileDateTime(user.createdAt)],
+    [profileText('登录有效期','Session expires'), formatProfileDateTime(profile.sessionExpiresAt)],
   ];
   return `<div class="report-list">${rows.map(r => `<div class="report-row"><div><b>${h(r[0])}</b></div><strong>${h(r[1])}</strong></div>`).join('')}</div>`;
+}
+
+function formatProfileDateTime(value) {
+  if (!value) return '-';
+  const d = new Date(String(value).replace(' ', 'T'));
+  if (Number.isNaN(d.getTime())) return String(value);
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}年${pad(d.getMonth() + 1)}月${pad(d.getDate())}日 ${pad(d.getHours())}时${pad(d.getMinutes())}分${pad(d.getSeconds())}秒`;
 }
 
 function profilePrefsForm() {

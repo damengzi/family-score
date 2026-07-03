@@ -22,6 +22,8 @@ func New(ctrl *controller.Controller, staticFiles embed.FS) *gin.Engine {
 	r.Use(gin.Recovery())
 
 	r.GET("/", serveEmbeddedFile(staticFiles, "web/index.html", "text/html; charset=utf-8"))
+	r.GET("/favicon.svg", serveEmbeddedFile(staticFiles, "web/favicon.svg", "image/svg+xml; charset=utf-8"))
+	r.GET("/favicon.ico", serveEmbeddedFile(staticFiles, "web/favicon.svg", "image/svg+xml; charset=utf-8"))
 	r.GET("/styles.css", serveEmbeddedFile(staticFiles, "web/styles.css", "text/css; charset=utf-8"))
 	r.GET("/app.js", serveEmbeddedFile(staticFiles, "web/app.js", "application/javascript; charset=utf-8"))
 	r.GET("/core.js", serveEmbeddedFile(staticFiles, "web/core.js", "application/javascript; charset=utf-8"))
