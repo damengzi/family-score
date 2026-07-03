@@ -9,7 +9,7 @@ function renderApp() {
   app.innerHTML = `<div class="layout">
     <div class="hero">
       <div><div class="eyebrow">${h(heroEyebrow())}</div><h1>${h(heroTitle())}</h1><p>${h(heroSubtitle())}</p><span class="role-note">${h(roleIntro())}</span></div>
-      <div class="hero-panel"><div class="row"><span class="tag ${isAdmin() ? 'green' : 'blue'}">${roleName(state.me?.role)}</span><button class="profile-entry" data-tab="profile">${tr('profile','个人主页')} · ${tr('currentUser','当前用户')}${tr('colon','：')}${h(displayName(state.me?.name))}</button></div><div class="row"><select id="childSelect">${childOptions}</select><button class="secondary" id="logoutBtn">${tr('logout','退出')}</button></div></div>
+      <div class="hero-panel"><div class="row"><span class="tag ${isAdmin() ? 'green' : 'blue'}">${roleName(state.me?.role)}</span><button class="profile-entry" data-tab="profile">${tr('profile','个人主页')} · ${tr('currentUser','当前用户')}${tr('colon','：')}${h(displayName(state.me?.name))}</button></div>${renderRealtimeClock()}<div class="row"><select id="childSelect">${childOptions}</select><button class="secondary" id="logoutBtn">${tr('logout','退出')}</button></div></div>
     </div>
     <div class="grid">
       ${metric(tr('metricBase','基准德育分'), acc.baseScore ?? 100, `<span class="tag ${statusClass(acc.statusLevel)}">${statusText(acc.statusLevel)}</span>`, '🌱')}
@@ -25,6 +25,7 @@ function renderApp() {
   document.getElementById('childSelect').onchange = async (e) => { state.childId = Number(e.target.value); await loadAll(); };
   document.getElementById('logoutBtn').onclick = async () => { await api('/api/auth/logout', {method:'POST', body:{}}); state.me=null; renderLogin(); };
   bindEvents();
+  mountRealtimeClock();
 }
 
 function metric(label, value, extra, icon) { return `<div class="card metric"><div class="metric-icon">${icon || '•'}</div><div class="label">${label}</div><div class="value">${h(value)}</div><div>${extra}</div></div>`; }
