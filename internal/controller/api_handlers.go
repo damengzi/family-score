@@ -99,6 +99,29 @@ func (c *Controller) AuthMe(w http.ResponseWriter, _ *http.Request, sess protoco
 	writeJSON(w, http.StatusOK, map[string]any{"user": sess})
 }
 
+// Profile 查询当前登录用户个人主页信息。
+func (c *Controller) Profile(w http.ResponseWriter, r *http.Request, sess protocol.Session) {
+	profile, err := c.svc.Profile(r.Context(), sess)
+	if err != nil {
+		errorJSON(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"profile": profile})
+}
+
+// ChangeMyPassword 修改当前登录用户自己的密码。
+func (c *Controller) ChangeMyPassword(w http.ResponseWriter, r *http.Request, sess protocol.Session) {
+	var req protocol.ChangePasswordParam
+	if !readJSON(w, r, &req) {
+		return
+	}
+	if err := c.svc.ChangeMyPassword(r.Context(), sess, req); err != nil {
+		errorJSON(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
 // Users 查询用户列表。
 func (c *Controller) Users(w http.ResponseWriter, r *http.Request, sess protocol.Session) {
 	users, err := c.svc.Users(r.Context(), sess)
@@ -403,10 +426,10 @@ func (c *Controller) Backup(w http.ResponseWriter, r *http.Request, sess protoco
 }
 
 // Backups 查询备份记录。
-func (c *Controller) Backups(w http.ResponseWriter, r *http.Request) {
-	backups, err := c.svc.Backups(r.Context())
+func (c *Controller) Backups(w http.ResponseWriter, r *http.Request, sess protocol.Session) {
+	backups, err := c.svc.Backups(r.Context(), sess)
 	if err != nil {
-		errorJSON(w, http.StatusInternalServerError, err.Error())
+		errorJSON(w, http.StatusForbidden, err.Error())
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"backups": backups})

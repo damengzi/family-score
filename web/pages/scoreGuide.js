@@ -14,5 +14,20 @@ function renderScoreGuide() {
       <tr><td>任务加分</td><td>孩子完成任务后需家长审核，通过后才加分。</td><td>同一孩子当天任务审核加分总额不超过 <b>15 分</b>。</td></tr>
     </tbody></table></div>
     <div class="card"><h2>兑换物品规则</h2><ul><li>只能使用兑换分或星星兑换。</li><li>基础分低于 90 分暂停高价值兑换，低于 80 分暂停全部兑换。</li><li>奖励可设置周限制、月限制和健康风险。</li><li>高咖啡因饮料、无限量零食、延迟睡觉、免作业类奖励不建议配置。</li><li>孩子账号可自主申请兑换，家长/管理员审核后生效。</li></ul></div>
+    <div class="grid two">
+      <div class="card"><h2>家庭场景案例</h2><div class="practice-list">
+        <div><b>学习自驱</b><p>主动开始作业、阅读后分享、错题订正完整，可给 1-3 分；重点记录“主动”和“坚持”。</p></div>
+        <div><b>生活自理</b><p>整理书包、按时洗漱、自己准备第二天衣物，可给 1 分；连续稳定再考虑星星。</p></div>
+        <div><b>家务协作</b><p>饭后收拾、扫地、晾衣服、照顾宠物，优先计入家庭小队分，强调“我是家庭成员”。</p></div>
+        <div><b>情绪修复</b><p>顶撞、拖延、摔东西后，不只扣分；要设计道歉、复盘、整理现场等修复任务。</p></div>
+      </div></div>
+      <div class="card"><h2>修复闭环</h2><ol class="principle-list"><li><b>描述事实：</b>今天发生了什么，不贴标签。</li><li><b>确认影响：</b>这件事影响了谁、影响了什么。</li><li><b>选择修复：</b>让孩子从 2-3 个可完成任务里选一个。</li><li><b>完成确认：</b>家长确认后恢复基准分，不翻旧账。</li></ol><div class="notice">修复任务建议控制在 5-15 分钟，目标是恢复秩序和责任感，不是制造额外惩罚。</div></div>
+    </div>
+    <div class="card"><h2>亲子沟通话术</h2><div class="speech-grid">
+      <div class="speech-card"><span>加分时</span><p>“我注意到你没有提醒就开始整理书包，这说明你在练习对自己的事情负责。”</p></div>
+      <div class="speech-card"><span>扣分时</span><p>“这次扣的是拖延这个行为，不是说你不好。我们一起看下次怎么提前开始。”</p></div>
+      <div class="speech-card"><span>修复时</span><p>“事情已经发生了，重要的是怎么补救。你想选择整理现场，还是写下下次做法？”</p></div>
+      <div class="speech-card"><span>兑换时</span><p>“你通过努力攒到了兑换分。我们也看看健康风险和本周次数，再决定什么时候兑换。”</p></div>
+    </div></div>
   </div>`;
 }

@@ -1,34 +1,40 @@
 function renderApp() {
-  if (!canOperate() && ['score', 'childConfig', 'taskConfig', 'rewardConfig', 'users', 'system'].includes(state.tab)) state.tab = 'detail';
-  if (!isAdmin() && state.tab === 'users') state.tab = 'detail';
+  applyRoleTheme();
+  if (!canOperate() && ['score', 'childConfig', 'taskConfig', 'rewardConfig', 'auditCenter'].includes(state.tab)) state.tab = 'overview';
+  if (!isAdmin() && ['users', 'system'].includes(state.tab)) state.tab = 'overview';
   const acc = state.dashboard?.account || {};
-  const childOptions = state.children.map(c => `<option value="${c.id}" ${c.id === state.childId ? 'selected' : ''}>${h(c.name)} ${c.age}岁</option>`).join('');
-  const operateTabs = canOperate() ? `${tabBtn('childConfig','孩子管理')}${tabBtn('taskConfig','任务自定义')}${tabBtn('rewardConfig','奖励/零食自定义')}${tabBtn('system','本机备份')}` : '';
-  const adminTabs = isAdmin() ? `${tabBtn('users','用户管理')}` : '';
+  const childOptions = state.children.map(c => `<option value="${c.id}" ${c.id === state.childId ? 'selected' : ''}>${h(c.name)} ${c.age}${tr('age','岁')}</option>`).join('');
+  const operateTabs = canOperate() ? `${tabBtn('childConfig',tr('childConfig','孩子管理'))}${tabBtn('taskConfig',tr('taskConfig','任务自定义'))}${tabBtn('rewardConfig',tr('rewardConfig','奖励/零食自定义'))}` : '';
+  const adminTabs = isAdmin() ? `${tabBtn('users',tr('users','用户管理'))}${tabBtn('system',tr('system','本机备份'))}` : '';
   app.innerHTML = `<div class="layout">
     <div class="hero">
-      <div><h1>家庭德育积分系统</h1><p>积分明细 · 加扣分 · 惩罚修复 · 任务配置 · 奖励兑换 · 本机备份</p></div>
-      <div class="row"><span class="tag ${isAdmin() ? 'green' : 'blue'}">${roleName(state.me?.role)}</span><span class="tag">当前用户：${h(state.me?.name || '-')}</span><select id="childSelect">${childOptions}</select><button class="secondary" id="logoutBtn">退出</button></div>
+      <div><div class="eyebrow">${h(heroEyebrow())}</div><h1>${h(heroTitle())}</h1><p>${h(heroSubtitle())}</p><span class="role-note">${h(roleIntro())}</span></div>
+      <div class="hero-panel"><div class="row"><span class="tag ${isAdmin() ? 'green' : 'blue'}">${roleName(state.me?.role)}</span><button class="profile-entry" data-tab="profile">${tr('profile','个人主页')} · ${tr('currentUser','当前用户')}${tr('colon','：')}${h(displayName(state.me?.name))}</button></div>${renderRealtimeClock()}<div class="row"><select id="childSelect">${childOptions}</select><button class="secondary" id="logoutBtn">${tr('logout','退出')}</button></div></div>
     </div>
     <div class="grid">
-      ${metric('基准德育分', acc.baseScore ?? 100, `<span class="tag ${statusClass(acc.statusLevel)}">${statusText(acc.statusLevel)}</span>`)}
-      ${metric('超额兑换分', acc.bonusScore ?? 0, '<span class="small">用于兑换零食/奖励</span>')}
-      ${metric('星星', acc.starCount ?? 0, '<span class="small">长期大奖</span>')}
-      ${metric('家庭小队分', acc.teamScore ?? 0, '<span class="small">月度评级</span>')}
+      ${metric(tr('metricBase','基准德育分'), acc.baseScore ?? 100, `<span class="tag ${statusClass(acc.statusLevel)}">${statusText(acc.statusLevel)}</span>`, '🌱')}
+      ${metric(tr('metricBonus','超额兑换分'), acc.bonusScore ?? 0, `<span class="small">${tr('metricBonusHint','用于兑换零食/奖励')}</span>`, '🪙')}
+      ${metric(tr('metricStars','星星'), acc.starCount ?? 0, `<span class="small">${tr('metricStarsHint','长期大奖')}</span>`, '⭐')}
+      ${metric(tr('metricTeam','家庭小队分'), acc.teamScore ?? 0, `<span class="small">${tr('metricTeamHint','月度评级')}</span>`, '🏠')}
     </div>
     <div class="tabs">
-      ${tabBtn('guide','分值说明')}${tabBtn('detail','积分明细')}${canOperate() ? tabBtn('score','加分/扣分/惩罚') : ''}${tabBtn('tasks','今日任务')}${tabBtn('rewards','奖励兑换')}${operateTabs}${adminTabs}
+      ${tabBtn('overview',tr('overview','今日概览'))}${canOperate() ? tabBtn('auditCenter',tr('auditCenter','待审核中心')) : ''}${tabBtn('growthReport',tr('growthReport','成长报告'))}${tabBtn('guide',tr('guide','分值说明'))}${tabBtn('detail',tr('detail','积分明细'))}${canOperate() ? tabBtn('score',tr('score','加分/扣分/惩罚')) : ''}${tabBtn('tasks',tr('tasks','今日任务'))}${tabBtn('rewards',tr('rewards','奖励兑换'))}${operateTabs}${adminTabs}
     </div>
-    ${renderTab()}
+    ${localizeHtml(renderTab())}
   </div>`;
   document.getElementById('childSelect').onchange = async (e) => { state.childId = Number(e.target.value); await loadAll(); };
   document.getElementById('logoutBtn').onclick = async () => { await api('/api/auth/logout', {method:'POST', body:{}}); state.me=null; renderLogin(); };
   bindEvents();
+  mountRealtimeClock();
 }
 
-function metric(label, value, extra) { return `<div class="card metric"><div class="label">${label}</div><div class="value">${h(value)}</div><div>${extra}</div></div>`; }
+function metric(label, value, extra, icon) { return `<div class="card metric"><div class="metric-icon">${icon || '•'}</div><div class="label">${label}</div><div class="value">${h(value)}</div><div>${extra}</div></div>`; }
 function tabBtn(key, text) { return `<button class="tab ${state.tab===key?'active':''}" data-tab="${key}">${text}</button>`; }
 function renderTab() {
+  if (state.tab === 'overview') return renderOverview();
+  if (state.tab === 'profile') return renderProfile();
+  if (state.tab === 'auditCenter') return renderAuditCenter();
+  if (state.tab === 'growthReport') return renderGrowthReport();
   if (state.tab === 'guide') return renderScoreGuide();
   if (state.tab === 'score') return renderScoreForm();
   if (state.tab === 'tasks') return renderTasks();
@@ -41,32 +47,97 @@ function renderTab() {
   return renderDetail();
 }
 
+function heroEyebrow() {
+  if (state.me?.role === 'ADMIN') return tr('heroAdminEyebrow','家庭系统总控台');
+  if (state.me?.role === 'PARENT') return tr('heroParentEyebrow','今日陪伴与审核');
+  if (state.me?.role === 'CHILD') return tr('heroChildEyebrow','我的成长小基地');
+  return tr('heroGuestEyebrow','本机家庭成长空间');
+}
+
+function heroTitle() {
+  if (state.me?.role === 'CHILD') return tr('heroChildTitle','今天也要点亮一个小进步');
+  if (state.me?.role === 'PARENT') return tr('heroParentTitle','把规则变成温和、稳定的陪伴');
+  return tr('heroAdminTitle','家庭德育积分系统');
+}
+
+function heroSubtitle() {
+  if (state.me?.role === 'CHILD') return tr('heroChildSubtitle','完成任务，积攒兑换分和星星，慢慢解锁喜欢的奖励。');
+  if (state.me?.role === 'PARENT') return tr('heroParentSubtitle','关注状态、确认任务、记录行为，让每一次反馈都有迹可循。');
+  if (state.me?.role === 'ADMIN') return tr('heroAdminSubtitle','积分明细 · 加扣分 · 惩罚修复 · 任务配置 · 奖励兑换 · 本机备份');
+  return tr('heroGuestSubtitle','适合家庭本机部署的德育积分和成长记录系统。');
+}
+
 function bindEvents() {
   document.querySelectorAll('[data-tab]').forEach(b => b.onclick = async () => { state.tab = b.dataset.tab; renderApp(); });
+  document.querySelectorAll('[data-score-type]').forEach(b => b.onclick = () => fillScorePreset(b));
+  document.querySelectorAll('[data-task-name]').forEach(b => b.onclick = () => fillTaskPreset(b));
+  document.querySelectorAll('[data-reward-name]').forEach(b => b.onclick = () => fillRewardPreset(b));
+  const profilePrefsForm = document.getElementById('profilePrefsForm');
+  if (profilePrefsForm) profilePrefsForm.onsubmit = (e) => { e.preventDefault(); const body = Object.fromEntries(new FormData(e.target)); savePrefs({theme: body.theme || 'system', language: body.language || 'zh'}); toast(tr('toastPrefsSaved','偏好已保存')); renderApp(); };
+  const profilePasswordForm = document.getElementById('profilePasswordForm');
+  if (profilePasswordForm) profilePasswordForm.onsubmit = async (e) => { e.preventDefault(); const body = Object.fromEntries(new FormData(e.target)); if (body.newPassword !== body.confirmPassword) { toast(tr('toastPasswordMismatch','两次输入的新密码不一致')); return; } try { await api('/api/profile/password', {method:'POST', body:{oldPassword:body.oldPassword, newPassword:body.newPassword}}); e.target.reset(); toast(tr('toastPasswordChanged','密码已修改，请牢记新密码')); } catch(err) { toast(err.message); } };
   const scoreForm = document.getElementById('scoreForm');
-  if (scoreForm) scoreForm.onsubmit = async (e) => { e.preventDefault(); const body = Object.fromEntries(new FormData(e.target)); body.childId = state.childId; body.scoreChange = Number(body.scoreChange); body.targetAccount = body.recordType === 'TEAM' ? 'TEAM' : body.recordType === 'STAR' ? 'STAR' : 'AUTO'; try { await api('/api/score-records', {method:'POST', body}); toast('记录成功'); await loadAll(); } catch(err) { toast(err.message); } };
+  if (scoreForm) scoreForm.onsubmit = async (e) => { e.preventDefault(); const body = Object.fromEntries(new FormData(e.target)); body.childId = state.childId; body.scoreChange = Number(body.scoreChange); body.targetAccount = body.recordType === 'TEAM' ? 'TEAM' : body.recordType === 'STAR' ? 'STAR' : 'AUTO'; try { await api('/api/score-records', {method:'POST', body}); toast(tr('toastRecordSaved','记录成功')); await loadAll(); } catch(err) { toast(err.message); } };
   const childForm = document.getElementById('childForm');
-  if (childForm) childForm.onsubmit = async (e) => { e.preventDefault(); const body = Object.fromEntries(new FormData(e.target)); body.age = Number(body.age); body.parentUserId = Number(body.parentUserId || 0); try { await api('/api/children', {method:'POST', body}); toast('孩子已新增'); await loadHome(); } catch(err) { toast(err.message); } };
+  if (childForm) childForm.onsubmit = async (e) => { e.preventDefault(); const body = Object.fromEntries(new FormData(e.target)); body.age = Number(body.age); body.parentUserId = Number(body.parentUserId || 0); try { await api('/api/children', {method:'POST', body}); toast(tr('toastChildAdded','孩子已新增')); await loadHome(); } catch(err) { toast(err.message); } };
   const taskTemplateForm = document.getElementById('taskTemplateForm');
-  if (taskTemplateForm) taskTemplateForm.onsubmit = async (e) => { e.preventDefault(); const body = Object.fromEntries(new FormData(e.target)); body.scoreValue = Number(body.scoreValue); try { await api('/api/task-templates', {method:'POST', body}); toast('任务模板已新增'); await loadAll(); } catch(err) { toast(err.message); } };
+  if (taskTemplateForm) taskTemplateForm.onsubmit = async (e) => { e.preventDefault(); const body = Object.fromEntries(new FormData(e.target)); body.scoreValue = Number(body.scoreValue); try { await api('/api/task-templates', {method:'POST', body}); toast(tr('toastTaskTemplateAdded','任务模板已新增')); await loadAll(); } catch(err) { toast(err.message); } };
   const rewardForm = document.getElementById('rewardForm');
-  if (rewardForm) rewardForm.onsubmit = async (e) => { e.preventDefault(); const body = Object.fromEntries(new FormData(e.target)); ['costScore','costStar','weeklyLimit','monthlyLimit'].forEach(k => body[k] = Number(body[k])); try { await api('/api/rewards', {method:'POST', body}); toast('奖励已新增'); await loadAll(); } catch(err) { toast(err.message); } };
+  if (rewardForm) rewardForm.onsubmit = async (e) => { e.preventDefault(); const body = Object.fromEntries(new FormData(e.target)); ['costScore','costStar','weeklyLimit','monthlyLimit'].forEach(k => body[k] = Number(body[k])); try { await api('/api/rewards', {method:'POST', body}); toast(tr('toastRewardAdded','奖励已新增')); await loadAll(); } catch(err) { toast(err.message); } };
   const userRole = document.getElementById('userRole');
   if (userRole) userRole.onchange = () => { const field = document.getElementById('bindChildField'); if (field) field.style.display = userRole.value === 'CHILD' ? 'block' : 'none'; };
   const userForm = document.getElementById('userForm');
-  if (userForm) userForm.onsubmit = async (e) => { e.preventDefault(); const body = Object.fromEntries(new FormData(e.target)); body.childId = Number(body.childId || 0); try { await api('/api/users', {method:'POST', body}); toast('用户已注册'); await loadAll(); } catch(err) { toast(err.message); } };
-  document.querySelectorAll('[data-save-user]').forEach(b => b.onclick = async () => { const id = Number(b.dataset.saveUser); const body = {displayName: document.querySelector(`[data-user-name="${id}"]`)?.value || '', childId: Number(document.querySelector(`[data-user-child="${id}"]`)?.value || 0), password: document.querySelector(`[data-user-pass="${id}"]`)?.value || ''}; try { const data = await api(`/api/users/${id}`, {method:'PATCH', body}); if (data.user?.id === state.me.userId) state.me.name = data.user.name; toast('用户已保存'); await loadAll(); } catch(err) { toast(err.message); } });
-  document.querySelectorAll('[data-save-child]').forEach(b => b.onclick = async () => { const id = Number(b.dataset.saveChild); const body = {name: document.querySelector(`[data-child-name="${id}"]`)?.value || '', age: Number(document.querySelector(`[data-child-age="${id}"]`)?.value || 0), gender: document.querySelector(`[data-child-gender="${id}"]`)?.value || 'BOY', parentUserId: Number(document.querySelector(`[data-child-parent="${id}"]`)?.value || 0)}; try { await api(`/api/children/${id}`, {method:'PATCH', body}); toast('孩子档案已保存'); await loadHome(); } catch(err) { toast(err.message); } });
-  document.querySelectorAll('[data-del-child]').forEach(b => b.onclick = async () => { if (!confirm('确认删除该孩子？相关积分、任务、兑换记录也会删除，绑定的孩子账号会被注销。')) return; try { await api(`/api/children/${b.dataset.delChild}`, {method:'DELETE'}); toast('孩子已删除'); if (state.childId === Number(b.dataset.delChild)) state.childId = null; await loadHome(); } catch(err) { toast(err.message); } });
-  document.querySelectorAll('[data-del-task-template]').forEach(b => b.onclick = async () => { if (!confirm('确认删除该任务模板？')) return; try { await api(`/api/task-templates/${b.dataset.delTaskTemplate}`, {method:'DELETE'}); toast('已删除'); await loadAll(); } catch(err) { toast(err.message); } });
-  document.querySelectorAll('[data-del-reward]').forEach(b => b.onclick = async () => { if (!confirm('确认删除该奖励？')) return; try { await api(`/api/rewards/${b.dataset.delReward}`, {method:'DELETE'}); toast('已删除'); await loadAll(); } catch(err) { toast(err.message); } });
-  document.querySelectorAll('[data-del-user]').forEach(b => b.onclick = async () => { if (!confirm('确认注销该用户？注销后该账号不能登录。')) return; try { await api(`/api/users/${b.dataset.delUser}`, {method:'DELETE'}); toast('用户已注销'); await loadAll(); } catch(err) { toast(err.message); } });
-  document.querySelectorAll('[data-submit-task]').forEach(b => b.onclick = async () => { try { await api(`/api/tasks/${b.dataset.submitTask}/submit`, {method:'POST', body:{submitNote:'已完成'}}); toast('已提交，等待家长确认'); await loadAll(); } catch(err) { toast(err.message); } });
-  document.querySelectorAll('[data-audit-task]').forEach(b => b.onclick = async () => { try { await api(`/api/tasks/${b.dataset.auditTask}/audit`, {method:'POST', body:{result:'APPROVED', auditNote:'通过'}}); toast('任务已通过'); await loadAll(); } catch(err) { toast(err.message); } });
-  document.querySelectorAll('[data-reject-task]').forEach(b => b.onclick = async () => { try { await api(`/api/tasks/${b.dataset.rejectTask}/audit`, {method:'POST', body:{result:'REJECTED', auditNote:'暂不通过'}}); toast('任务已驳回'); await loadAll(); } catch(err) { toast(err.message); } });
-  document.querySelectorAll('[data-reward]').forEach(b => b.onclick = async () => { try { await api('/api/exchange-orders', {method:'POST', body:{childId:state.childId, rewardId:Number(b.dataset.reward), note:'申请兑换'}}); toast('已提交兑换申请，需家长审核'); await loadAll(); } catch(err) { toast(err.message); } });
-  document.querySelectorAll('[data-audit-order]').forEach(b => b.onclick = async () => { try { await api(`/api/exchange-orders/${b.dataset.auditOrder}/audit`, {method:'POST', body:{result:'APPROVED', auditNote:'通过'}}); toast('兑换已通过'); await loadAll(); } catch(err) { toast(err.message); } });
-  document.querySelectorAll('[data-reject-order]').forEach(b => b.onclick = async () => { try { await api(`/api/exchange-orders/${b.dataset.rejectOrder}/audit`, {method:'POST', body:{result:'REJECTED', auditNote:'驳回'}}); toast('兑换已驳回'); await loadAll(); } catch(err) { toast(err.message); } });
+  if (userForm) userForm.onsubmit = async (e) => { e.preventDefault(); const body = Object.fromEntries(new FormData(e.target)); body.childId = Number(body.childId || 0); try { await api('/api/users', {method:'POST', body}); toast(tr('toastUserAdded','用户已注册')); await loadAll(); } catch(err) { toast(err.message); } };
+  document.querySelectorAll('[data-save-user]').forEach(b => b.onclick = async () => { const id = Number(b.dataset.saveUser); const body = {displayName: document.querySelector(`[data-user-name="${id}"]`)?.value || '', childId: Number(document.querySelector(`[data-user-child="${id}"]`)?.value || 0), password: document.querySelector(`[data-user-pass="${id}"]`)?.value || ''}; try { const data = await api(`/api/users/${id}`, {method:'PATCH', body}); if (data.user?.id === state.me.userId) state.me.name = data.user.name; toast(tr('toastUserSaved','用户已保存')); await loadAll(); } catch(err) { toast(err.message); } });
+  document.querySelectorAll('[data-save-child]').forEach(b => b.onclick = async () => { const id = Number(b.dataset.saveChild); const body = {name: document.querySelector(`[data-child-name="${id}"]`)?.value || '', age: Number(document.querySelector(`[data-child-age="${id}"]`)?.value || 0), gender: document.querySelector(`[data-child-gender="${id}"]`)?.value || 'BOY', parentUserId: Number(document.querySelector(`[data-child-parent="${id}"]`)?.value || 0)}; try { await api(`/api/children/${id}`, {method:'PATCH', body}); toast(tr('toastChildSaved','孩子档案已保存')); await loadHome(); } catch(err) { toast(err.message); } });
+  document.querySelectorAll('[data-del-child]').forEach(b => b.onclick = async () => { if (!confirm(tr('confirmDeleteChild','确认删除该孩子？相关积分、任务、兑换记录也会删除，绑定的孩子账号会被注销。'))) return; try { await api(`/api/children/${b.dataset.delChild}`, {method:'DELETE'}); toast(tr('toastDeleted','已删除')); if (state.childId === Number(b.dataset.delChild)) state.childId = null; await loadHome(); } catch(err) { toast(err.message); } });
+  document.querySelectorAll('[data-del-task-template]').forEach(b => b.onclick = async () => { if (!confirm(tr('confirmDeleteTaskTemplate','确认删除该任务模板？'))) return; try { await api(`/api/task-templates/${b.dataset.delTaskTemplate}`, {method:'DELETE'}); toast(tr('toastDeleted','已删除')); await loadAll(); } catch(err) { toast(err.message); } });
+  document.querySelectorAll('[data-del-reward]').forEach(b => b.onclick = async () => { if (!confirm(tr('confirmDeleteReward','确认删除该奖励？'))) return; try { await api(`/api/rewards/${b.dataset.delReward}`, {method:'DELETE'}); toast(tr('toastDeleted','已删除')); await loadAll(); } catch(err) { toast(err.message); } });
+  document.querySelectorAll('[data-del-user]').forEach(b => b.onclick = async () => { if (!confirm(tr('confirmDeleteUser','确认注销该用户？注销后该账号不能登录。'))) return; try { await api(`/api/users/${b.dataset.delUser}`, {method:'DELETE'}); toast(tr('toastDeleted','已删除')); await loadAll(); } catch(err) { toast(err.message); } });
+  document.querySelectorAll('[data-submit-task]').forEach(b => b.onclick = async () => { try { await api(`/api/tasks/${b.dataset.submitTask}/submit`, {method:'POST', body:{submitNote:'已完成'}}); toast(tr('toastTaskSubmitted','已提交，等待家长确认')); await loadAll(); } catch(err) { toast(err.message); } });
+  document.querySelectorAll('[data-audit-task]').forEach(b => b.onclick = async () => { try { await api(`/api/tasks/${b.dataset.auditTask}/audit`, {method:'POST', body:{result:'APPROVED', auditNote:'通过'}}); toast(tr('toastTaskApproved','任务已通过')); await loadAll(); } catch(err) { toast(err.message); } });
+  document.querySelectorAll('[data-reject-task]').forEach(b => b.onclick = async () => { try { await api(`/api/tasks/${b.dataset.rejectTask}/audit`, {method:'POST', body:{result:'REJECTED', auditNote:'暂不通过'}}); toast(tr('toastTaskRejected','任务已驳回')); await loadAll(); } catch(err) { toast(err.message); } });
+  document.querySelectorAll('[data-reward]').forEach(b => b.onclick = async () => { if (!state.childId) { toast(tr('toastChooseChild','请先选择孩子')); return; } try { await api('/api/exchange-orders', {method:'POST', body:{childId:state.childId, rewardId:Number(b.dataset.reward), note:'申请兑换'}}); toast(tr('toastExchangeSubmitted','已提交兑换申请，需家长审核')); await loadAll(); } catch(err) { toast(err.message); } });
+  document.querySelectorAll('[data-wishlist]').forEach(b => b.onclick = () => { if (!state.childId) { toast(tr('toastChooseChild','请先选择孩子')); return; } const added = toggleWishlist(state.childId, Number(b.dataset.wishlist)); toast(added ? tr('toastWishlistAdded','已加入愿望单') : tr('toastWishlistRemoved','已移出愿望单')); renderApp(); });
+  document.querySelectorAll('[data-audit-order]').forEach(b => b.onclick = async () => { try { await api(`/api/exchange-orders/${b.dataset.auditOrder}/audit`, {method:'POST', body:{result:'APPROVED', auditNote:'通过'}}); toast(tr('toastExchangeApproved','兑换已通过')); await loadAll(); } catch(err) { toast(err.message); } });
+  document.querySelectorAll('[data-reject-order]').forEach(b => b.onclick = async () => { try { await api(`/api/exchange-orders/${b.dataset.rejectOrder}/audit`, {method:'POST', body:{result:'REJECTED', auditNote:'驳回'}}); toast(tr('toastExchangeRejected','兑换已驳回')); await loadAll(); } catch(err) { toast(err.message); } });
   const backupBtn = document.getElementById('backupBtn');
   if (backupBtn) backupBtn.onclick = async () => { try { const data = await api('/api/system/backup', {method:'POST', body:{}}); toast(`备份完成：${data.filePath}`); } catch(err) { toast(err.message); } };
 }
+
+function fillScorePreset(btn) {
+  const form = document.getElementById('scoreForm');
+  if (!form) return;
+  form.elements.recordType.value = btn.dataset.scoreType || 'ADD';
+  form.elements.itemName.value = btn.dataset.scoreItem || '';
+  form.elements.scoreChange.value = btn.dataset.scoreValue || 1;
+  form.elements.reason.value = btn.dataset.scoreReason || '';
+  toast(tr('toastScorePreset','已填入记录模板，可继续修改'));
+}
+
+function fillTaskPreset(btn) {
+  const form = document.getElementById('taskTemplateForm');
+  if (!form) return;
+  form.elements.taskName.value = btn.dataset.taskName || '';
+  form.elements.taskType.value = btn.dataset.taskType || 'DAILY';
+  form.elements.category.value = btn.dataset.taskCategory || 'STUDY';
+  form.elements.scoreValue.value = btn.dataset.taskValue || 1;
+  form.elements.targetAccount.value = btn.dataset.taskTarget || 'AUTO';
+  form.elements.description.value = btn.dataset.taskDescription || '';
+  toast(tr('toastTaskPreset','已填入任务模板，可继续修改'));
+}
+
+function fillRewardPreset(btn) {
+  const form = document.getElementById('rewardForm');
+  if (!form) return;
+  form.elements.rewardName.value = btn.dataset.rewardName || '';
+  form.elements.rewardType.value = btn.dataset.rewardType || 'SNACK';
+  form.elements.healthRisk.value = btn.dataset.rewardRisk || 'NONE';
+  form.elements.costScore.value = btn.dataset.rewardScore || 0;
+  form.elements.costStar.value = btn.dataset.rewardStar || 0;
+  form.elements.weeklyLimit.value = btn.dataset.rewardWeekly || 1;
+  form.elements.monthlyLimit.value = btn.dataset.rewardMonthly || 1;
+  form.elements.description.value = btn.dataset.rewardDescription || '';
+  toast(tr('toastRewardPreset','已填入奖励配置，可继续修改'));
+}
+

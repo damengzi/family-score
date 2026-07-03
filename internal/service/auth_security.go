@@ -16,6 +16,52 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+// Profile 查询当前登录用户的个人主页基础信息。
+func (s *Service) Profile(ctx context.Context, sess protocol.Session) (protocol.Profile, error) {
+	var user protocol.User
+	err := s.repo.DB.QueryRowContext(ctx, `SELECT id, family_id, COALESCE(child_id, 0), role, login_name, display_name, enabled, created_at FROM users WHERE id = ? AND family_id = ? AND enabled = 1`, sess.UserID, sess.FamilyID).Scan(&user.ID, &user.FamilyID, &user.ChildID, &user.Role, &user.LoginName, &user.Name, &user.Enabled, &user.CreatedAt)
+	if err != nil {
+		return protocol.Profile{}, errors.New("用户不存在或已注销")
+	}
+	profile := protocol.Profile{User: user, SessionExpiresAt: sess.ExpiresAt.Format(time.RFC3339)}
+	if user.ChildID > 0 {
+		_ = s.repo.DB.QueryRowContext(ctx, `SELECT name FROM children WHERE id = ? AND family_id = ?`, user.ChildID, sess.FamilyID).Scan(&profile.BoundChildName)
+	}
+	children, err := s.Children(ctx, sess)
+	if err == nil {
+		profile.AccessibleChilds = len(children)
+	}
+	return profile, nil
+}
+
+// ChangeMyPassword 修改当前登录用户自己的密码，必须校验旧密码。
+func (s *Service) ChangeMyPassword(ctx context.Context, sess protocol.Session, req protocol.ChangePasswordParam) error {
+	req.OldPassword = strings.TrimSpace(req.OldPassword)
+	if req.OldPassword == "" || len(req.NewPassword) < 4 {
+		return errors.New("旧密码不能为空，新密码至少 4 位")
+	}
+	if req.OldPassword == req.NewPassword {
+		return errors.New("新密码不能与旧密码相同")
+	}
+	var hash string
+	if err := s.repo.DB.QueryRowContext(ctx, `SELECT password_hash FROM users WHERE id = ? AND family_id = ? AND enabled = 1`, sess.UserID, sess.FamilyID).Scan(&hash); err != nil {
+		return errors.New("用户不存在或已注销")
+	}
+	if bcrypt.CompareHashAndPassword([]byte(hash), []byte(req.OldPassword)) != nil {
+		return errors.New("旧密码不正确")
+	}
+	newHash, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+	_, err = s.repo.DB.ExecContext(ctx, `UPDATE users SET password_hash = ?, failed_login_date = '', failed_login_count = 0, locked_until = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND family_id = ?`, string(newHash), sess.UserID, sess.FamilyID)
+	if err != nil {
+		return err
+	}
+	logger.L().Info("用户修改自己的密码", zap.Int64("user_id", sess.UserID), zap.String("role", sess.Role))
+	return nil
+}
+
 type passwordCaptchaSession struct {
 	Answer    string
 	ExpiresAt time.Time

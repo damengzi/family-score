@@ -153,6 +153,14 @@ type SystemStatusParam struct {
 	Now            string `json:"now"`
 }
 
+// Profile 表示当前登录用户的个人主页基础信息。
+type Profile struct {
+	User             User   `json:"user"`
+	BoundChildName   string `json:"boundChildName"`
+	AccessibleChilds int    `json:"accessibleChilds"`
+	SessionExpiresAt string `json:"sessionExpiresAt"`
+}
+
 // SetupInitParam 表示首次初始化参数。
 type SetupInitParam struct {
 	ParentName string `json:"parentName"`
@@ -215,6 +223,12 @@ type ResetPasswordParam struct {
 	Password      string `json:"password"`
 	CaptchaToken  string `json:"captchaToken"`
 	CaptchaAnswer string `json:"captchaAnswer"`
+}
+
+// ChangePasswordParam 表示登录用户修改自己密码的参数。
+type ChangePasswordParam struct {
+	OldPassword string `json:"oldPassword"`
+	NewPassword string `json:"newPassword"`
 }
 
 // SelfRegisterParam 表示自主注册普通用户参数。

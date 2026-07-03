@@ -22,6 +22,8 @@ func New(ctrl *controller.Controller, staticFiles embed.FS) *gin.Engine {
 	r.Use(gin.Recovery())
 
 	r.GET("/", serveEmbeddedFile(staticFiles, "web/index.html", "text/html; charset=utf-8"))
+	r.GET("/favicon.svg", serveEmbeddedFile(staticFiles, "web/favicon.svg", "image/svg+xml; charset=utf-8"))
+	r.GET("/favicon.ico", serveEmbeddedFile(staticFiles, "web/favicon.svg", "image/svg+xml; charset=utf-8"))
 	r.GET("/styles.css", serveEmbeddedFile(staticFiles, "web/styles.css", "text/css; charset=utf-8"))
 	r.GET("/app.js", serveEmbeddedFile(staticFiles, "web/app.js", "application/javascript; charset=utf-8"))
 	r.GET("/core.js", serveEmbeddedFile(staticFiles, "web/core.js", "application/javascript; charset=utf-8"))
@@ -120,6 +122,10 @@ func dispatchAPI(ctrl *controller.Controller, c *gin.Context) {
 		ctrl.AuthMe(w, r, sess)
 	case path == "auth/logout" && r.Method == http.MethodPost:
 		ctrl.Logout(w, r)
+	case path == "profile" && r.Method == http.MethodGet:
+		ctrl.Profile(w, r, sess)
+	case path == "profile/password" && r.Method == http.MethodPost:
+		ctrl.ChangeMyPassword(w, r, sess)
 	case path == "users" && r.Method == http.MethodGet:
 		ctrl.Users(w, r, sess)
 	case path == "users" && r.Method == http.MethodPost:
@@ -169,7 +175,7 @@ func dispatchAPI(ctrl *controller.Controller, c *gin.Context) {
 	case path == "system/backup" && r.Method == http.MethodPost:
 		ctrl.Backup(w, r, sess)
 	case path == "system/backups" && r.Method == http.MethodGet:
-		ctrl.Backups(w, r)
+		ctrl.Backups(w, r, sess)
 	default:
 		c.JSON(http.StatusNotFound, gin.H{"error": "接口不存在"})
 	}

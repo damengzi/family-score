@@ -1,4 +1,5 @@
 function renderSetup() {
+  document.body.dataset.role = 'guest';
   app.innerHTML = `<div class="login"><div class="card">
     <h1>初始化家庭德育积分系统</h1>
     <p class="small">数据将保存在本机：${h(state.status.dataDir)}。初始化后会自动创建系统管理员账号。</p>
@@ -23,6 +24,7 @@ function renderSetup() {
 }
 
 function renderLogin() {
+  document.body.dataset.role = 'guest';
   app.innerHTML = `<div class="login"><div class="card">
     <h1>家庭德育积分系统</h1>
     <p class="small">请输入你的登录名和密码。家长和孩子账号由管理员或家长创建。</p>
@@ -58,6 +60,7 @@ function renderLogin() {
 }
 
 async function renderForgotPassword() {
+  document.body.dataset.role = 'guest';
   app.innerHTML = `<div class="login"><div class="card">
     <h1>重置密码</h1>
     <p class="small">输入登录名，选择正确的图片验证码后设置新密码。</p>

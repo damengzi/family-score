@@ -146,7 +146,7 @@ func (s *Service) SelfRegister(ctx context.Context, req SelfRegisterParam) (int6
 	return id, nil
 }
 
-// EnsureBuiltinAdmin 确保已有数据也拥有固定管理员账号 admin / 654321。
+// EnsureBuiltinAdmin 确保已有数据也拥有管理员账号 admin。
 func (s *Service) EnsureBuiltinAdmin(ctx context.Context) error {
 	var familyID int64
 	if err := s.repo.DB.QueryRowContext(ctx, `SELECT id FROM families ORDER BY id LIMIT 1`).Scan(&familyID); err != nil {
@@ -159,12 +159,12 @@ func (s *Service) EnsureBuiltinAdmin(ctx context.Context) error {
 	if err := s.repo.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM users WHERE login_name = 'admin'`).Scan(&count); err != nil {
 		return err
 	}
-	hash, err := bcrypt.GenerateFromPassword([]byte(consts.DefaultAdminPassword), bcrypt.DefaultCost)
-	if err != nil {
+	if count > 0 {
+		_, err := s.repo.DB.ExecContext(ctx, `UPDATE users SET role = 'ADMIN', enabled = 1, child_id = NULL, updated_at = CURRENT_TIMESTAMP WHERE login_name = 'admin'`)
 		return err
 	}
-	if count > 0 {
-		_, err := s.repo.DB.ExecContext(ctx, `UPDATE users SET role = 'ADMIN', enabled = 1, child_id = NULL, password_hash = ? WHERE login_name = 'admin'`, string(hash))
+	hash, err := bcrypt.GenerateFromPassword([]byte(consts.DefaultAdminPassword), bcrypt.DefaultCost)
+	if err != nil {
 		return err
 	}
 	_, err = s.repo.DB.ExecContext(ctx, `INSERT INTO users(family_id, child_id, display_name, role, login_name, password_hash, enabled) VALUES(?, NULL, '管理员', 'ADMIN', 'admin', ?, 1)`, familyID, string(hash))
@@ -652,7 +652,10 @@ func (s *Service) Backup(ctx context.Context, sess protocol.Session) (string, in
 }
 
 // Backups 查询本地备份记录。
-func (s *Service) Backups(ctx context.Context) ([]protocol.BackupRecord, error) {
+func (s *Service) Backups(ctx context.Context, sess protocol.Session) ([]protocol.BackupRecord, error) {
+	if !IsAdmin(sess) {
+		return nil, errors.New("只有管理员可以查看备份记录")
+	}
 	rows, err := s.repo.DB.QueryContext(ctx, `SELECT id, operation_type, file_path, file_size, status, remark, created_at FROM backup_records ORDER BY id DESC LIMIT 50`)
 	if err != nil {
 		return nil, err
