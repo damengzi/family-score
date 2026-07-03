@@ -146,7 +146,7 @@ func (s *Service) SelfRegister(ctx context.Context, req SelfRegisterParam) (int6
 	return id, nil
 }
 
-// EnsureBuiltinAdmin 确保已有数据也拥有固定管理员账号 admin / 654321。
+// EnsureBuiltinAdmin 确保已有数据也拥有管理员账号 admin。
 func (s *Service) EnsureBuiltinAdmin(ctx context.Context) error {
 	var familyID int64
 	if err := s.repo.DB.QueryRowContext(ctx, `SELECT id FROM families ORDER BY id LIMIT 1`).Scan(&familyID); err != nil {
@@ -159,12 +159,12 @@ func (s *Service) EnsureBuiltinAdmin(ctx context.Context) error {
 	if err := s.repo.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM users WHERE login_name = 'admin'`).Scan(&count); err != nil {
 		return err
 	}
-	hash, err := bcrypt.GenerateFromPassword([]byte(consts.DefaultAdminPassword), bcrypt.DefaultCost)
-	if err != nil {
+	if count > 0 {
+		_, err := s.repo.DB.ExecContext(ctx, `UPDATE users SET role = 'ADMIN', enabled = 1, child_id = NULL, updated_at = CURRENT_TIMESTAMP WHERE login_name = 'admin'`)
 		return err
 	}
-	if count > 0 {
-		_, err := s.repo.DB.ExecContext(ctx, `UPDATE users SET role = 'ADMIN', enabled = 1, child_id = NULL, password_hash = ? WHERE login_name = 'admin'`, string(hash))
+	hash, err := bcrypt.GenerateFromPassword([]byte(consts.DefaultAdminPassword), bcrypt.DefaultCost)
+	if err != nil {
 		return err
 	}
 	_, err = s.repo.DB.ExecContext(ctx, `INSERT INTO users(family_id, child_id, display_name, role, login_name, password_hash, enabled) VALUES(?, NULL, '管理员', 'ADMIN', 'admin', ?, 1)`, familyID, string(hash))

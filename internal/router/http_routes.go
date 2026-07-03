@@ -120,6 +120,10 @@ func dispatchAPI(ctrl *controller.Controller, c *gin.Context) {
 		ctrl.AuthMe(w, r, sess)
 	case path == "auth/logout" && r.Method == http.MethodPost:
 		ctrl.Logout(w, r)
+	case path == "profile" && r.Method == http.MethodGet:
+		ctrl.Profile(w, r, sess)
+	case path == "profile/password" && r.Method == http.MethodPost:
+		ctrl.ChangeMyPassword(w, r, sess)
 	case path == "users" && r.Method == http.MethodGet:
 		ctrl.Users(w, r, sess)
 	case path == "users" && r.Method == http.MethodPost:

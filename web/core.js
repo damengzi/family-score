@@ -1,5 +1,6 @@
 const app = document.getElementById('app');
-let state = { status: null, me: null, children: [], childId: null, dashboard: null, childDashboards: {}, records: [], rewards: [], taskTemplates: [], exchangeOrders: [], users: [], tab: 'overview' };
+let state = { status: null, me: null, profile: null, children: [], childId: null, dashboard: null, childDashboards: {}, records: [], rewards: [], taskTemplates: [], exchangeOrders: [], users: [], tab: 'overview' };
+let appPrefs = loadPrefs();
 
 const api = async (path, options = {}) => {
   const controller = new AbortController();
@@ -39,10 +40,41 @@ const isAdmin = () => state.me && state.me.role === 'ADMIN';
 const canOperate = () => state.me && (state.me.role === 'ADMIN' || state.me.role === 'PARENT');
 const roleName = (s) => ({ADMIN:'管理员',PARENT:'家长',CHILD:'孩子'}[s] || s);
 const roleKey = () => ({ADMIN:'admin',PARENT:'parent',CHILD:'child'}[state.me?.role] || 'guest');
-const applyRoleTheme = () => { document.body.dataset.role = roleKey(); };
+const applyRoleTheme = () => { document.body.dataset.role = roleKey(); applyPreferences(); };
 const roleIntro = () => ({ADMIN:'管理员模式：统筹家庭成员、账号和系统配置',PARENT:'家长模式：关注陪伴、审核和正向反馈',CHILD:'孩子模式：完成任务、积攒星星和兑换奖励'}[state.me?.role] || '家庭德育积分系统');
+const i18n = {
+  zh: {profile:'个人主页',overview:'今日概览',auditCenter:'待审核中心',growthReport:'成长报告',guide:'分值说明',detail:'积分明细',score:'加分/扣分/惩罚',tasks:'今日任务',rewards:'奖励兑换'},
+  en: {profile:'Profile',overview:'Overview',auditCenter:'Audit Center',growthReport:'Growth Report',guide:'Score Guide',detail:'Records',score:'Score',tasks:'Tasks',rewards:'Rewards'},
+};
+const langKey = () => appPrefs.language === 'en' ? 'en' : 'zh';
+const tr = (key, fallback) => i18n[langKey()]?.[key] || fallback || key;
+
+function loadPrefs() {
+  try {
+    return { theme: 'system', language: 'zh', ...(JSON.parse(localStorage.getItem('fs_profile_prefs') || '{}')) };
+  } catch {
+    return { theme: 'system', language: 'zh' };
+  }
+}
+
+function savePrefs(next) {
+  appPrefs = { ...appPrefs, ...next };
+  localStorage.setItem('fs_profile_prefs', JSON.stringify(appPrefs));
+  applyPreferences();
+}
+
+function effectiveTheme() {
+  if (appPrefs.theme === 'dark' || appPrefs.theme === 'light') return appPrefs.theme;
+  return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
+
+function applyPreferences() {
+  document.body.dataset.theme = effectiveTheme();
+  document.documentElement.lang = appPrefs.language === 'en' ? 'en' : 'zh-CN';
+}
 
 async function boot() {
+  applyPreferences();
   state.status = await api('/api/system/status');
   if (!state.status.setupCompleted) return renderSetup();
   try {
@@ -65,6 +97,7 @@ async function loadAll() {
   const result = {};
   const childDashboards = {};
   const reqs = [
+    api('/api/profile').then(data => result.profile = data.profile || null),
     api('/api/rewards').then(data => result.rewards = data.rewards || []),
     api('/api/exchange-orders').then(data => result.exchangeOrders = data.exchangeOrders || []),
   ];
@@ -79,6 +112,7 @@ async function loadAll() {
   }
   await Promise.all(reqs);
   state.rewards = result.rewards || [];
+  state.profile = result.profile || null;
   state.exchangeOrders = result.exchangeOrders || [];
   state.taskTemplates = result.taskTemplates || [];
   state.users = result.users || [];

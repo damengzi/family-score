@@ -18,7 +18,7 @@ function renderApp() {
       ${metric('家庭小队分', acc.teamScore ?? 0, '<span class="small">月度评级</span>', '🏠')}
     </div>
     <div class="tabs">
-      ${tabBtn('overview','今日概览')}${canOperate() ? tabBtn('auditCenter','待审核中心') : ''}${tabBtn('growthReport','成长报告')}${tabBtn('guide','分值说明')}${tabBtn('detail','积分明细')}${canOperate() ? tabBtn('score','加分/扣分/惩罚') : ''}${tabBtn('tasks','今日任务')}${tabBtn('rewards','奖励兑换')}${operateTabs}${adminTabs}
+      ${tabBtn('overview',tr('overview','今日概览'))}${tabBtn('profile',tr('profile','个人主页'))}${canOperate() ? tabBtn('auditCenter',tr('auditCenter','待审核中心')) : ''}${tabBtn('growthReport',tr('growthReport','成长报告'))}${tabBtn('guide',tr('guide','分值说明'))}${tabBtn('detail',tr('detail','积分明细'))}${canOperate() ? tabBtn('score',tr('score','加分/扣分/惩罚')) : ''}${tabBtn('tasks',tr('tasks','今日任务'))}${tabBtn('rewards',tr('rewards','奖励兑换'))}${operateTabs}${adminTabs}
     </div>
     ${renderTab()}
   </div>`;
@@ -31,6 +31,7 @@ function metric(label, value, extra, icon) { return `<div class="card metric"><d
 function tabBtn(key, text) { return `<button class="tab ${state.tab===key?'active':''}" data-tab="${key}">${text}</button>`; }
 function renderTab() {
   if (state.tab === 'overview') return renderOverview();
+  if (state.tab === 'profile') return renderProfile();
   if (state.tab === 'auditCenter') return renderAuditCenter();
   if (state.tab === 'growthReport') return renderGrowthReport();
   if (state.tab === 'guide') return renderScoreGuide();
@@ -70,6 +71,10 @@ function bindEvents() {
   document.querySelectorAll('[data-score-type]').forEach(b => b.onclick = () => fillScorePreset(b));
   document.querySelectorAll('[data-task-name]').forEach(b => b.onclick = () => fillTaskPreset(b));
   document.querySelectorAll('[data-reward-name]').forEach(b => b.onclick = () => fillRewardPreset(b));
+  const profilePrefsForm = document.getElementById('profilePrefsForm');
+  if (profilePrefsForm) profilePrefsForm.onsubmit = (e) => { e.preventDefault(); const body = Object.fromEntries(new FormData(e.target)); savePrefs({theme: body.theme || 'system', language: body.language || 'zh'}); toast('偏好已保存'); renderApp(); };
+  const profilePasswordForm = document.getElementById('profilePasswordForm');
+  if (profilePasswordForm) profilePasswordForm.onsubmit = async (e) => { e.preventDefault(); const body = Object.fromEntries(new FormData(e.target)); if (body.newPassword !== body.confirmPassword) { toast('两次输入的新密码不一致'); return; } try { await api('/api/profile/password', {method:'POST', body:{oldPassword:body.oldPassword, newPassword:body.newPassword}}); e.target.reset(); toast('密码已修改，请牢记新密码'); } catch(err) { toast(err.message); } };
   const scoreForm = document.getElementById('scoreForm');
   if (scoreForm) scoreForm.onsubmit = async (e) => { e.preventDefault(); const body = Object.fromEntries(new FormData(e.target)); body.childId = state.childId; body.scoreChange = Number(body.scoreChange); body.targetAccount = body.recordType === 'TEAM' ? 'TEAM' : body.recordType === 'STAR' ? 'STAR' : 'AUTO'; try { await api('/api/score-records', {method:'POST', body}); toast('记录成功'); await loadAll(); } catch(err) { toast(err.message); } };
   const childForm = document.getElementById('childForm');
