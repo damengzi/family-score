@@ -24,6 +24,7 @@ function renderSetup() {
 }
 
 function renderLogin() {
+  document.body.dataset.role = 'guest';
   app.innerHTML = `<div class="login"><div class="card">
     <h1>家庭德育积分系统</h1>
     <p class="small">请输入你的登录名和密码。家长和孩子账号由管理员或家长创建。</p>

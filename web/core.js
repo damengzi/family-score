@@ -1,5 +1,5 @@
 const app = document.getElementById('app');
-let state = { status: null, me: null, children: [], childId: null, dashboard: null, records: [], rewards: [], taskTemplates: [], exchangeOrders: [], users: [], tab: 'detail' };
+let state = { status: null, me: null, children: [], childId: null, dashboard: null, childDashboards: {}, records: [], rewards: [], taskTemplates: [], exchangeOrders: [], users: [], tab: 'overview' };
 
 const api = async (path, options = {}) => {
   const controller = new AbortController();
@@ -34,7 +34,7 @@ const toast = (msg) => {
 const setError = (id, msg) => { const el = document.getElementById(id); if (el) el.textContent = msg || ''; };
 const statusText = (s) => ({GREEN:'绿色稳定',BLUE:'蓝色提醒',YELLOW:'黄色关注',ORANGE:'橙色预警',RED:'红色重点帮助',DEEP_REPAIR:'深度修复'}[s] || s || '绿色稳定');
 const statusClass = (s) => ({GREEN:'green',BLUE:'blue',YELLOW:'yellow',ORANGE:'orange',RED:'red',DEEP_REPAIR:'red'}[s] || 'green');
-const recordTypeName = (s) => ({ADD:'加分',DEDUCT:'扣分',REPAIR:'惩罚/修复',TEAM:'家庭小队分',EXCHANGE:'兑换'}[s] || s);
+const recordTypeName = (s) => ({ADD:'加分',DEDUCT:'扣分',REPAIR:'惩罚/修复',TEAM:'家庭小队分',STAR:'星星',EXCHANGE:'兑换'}[s] || s);
 const isAdmin = () => state.me && state.me.role === 'ADMIN';
 const canOperate = () => state.me && (state.me.role === 'ADMIN' || state.me.role === 'PARENT');
 const roleName = (s) => ({ADMIN:'管理员',PARENT:'家长',CHILD:'孩子'}[s] || s);
@@ -63,6 +63,7 @@ async function loadHome() {
 
 async function loadAll() {
   const result = {};
+  const childDashboards = {};
   const reqs = [
     api('/api/rewards').then(data => result.rewards = data.rewards || []),
     api('/api/exchange-orders').then(data => result.exchangeOrders = data.exchangeOrders || []),
@@ -70,6 +71,7 @@ async function loadAll() {
   if (canOperate()) {
     reqs.push(api('/api/task-templates').then(data => result.taskTemplates = data.taskTemplates || []));
     reqs.push(api('/api/users').then(data => result.users = data.users || []));
+    reqs.push(Promise.allSettled(state.children.map(c => api(`/api/children/${c.id}/dashboard`).then(data => { childDashboards[c.id] = data; }))));
   }
   if (state.childId) {
     reqs.push(api(`/api/children/${state.childId}/dashboard`).then(data => result.dashboard = data));
@@ -81,6 +83,8 @@ async function loadAll() {
   state.taskTemplates = result.taskTemplates || [];
   state.users = result.users || [];
   state.dashboard = result.dashboard || null;
+  state.childDashboards = childDashboards;
+  if (state.childId && state.dashboard && !state.childDashboards[state.childId]) state.childDashboards[state.childId] = state.dashboard;
   state.records = result.records || [];
   renderApp();
 }
