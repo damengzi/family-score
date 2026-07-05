@@ -65,19 +65,15 @@ func (s *Service) SystemStatus(ctx context.Context) (SystemStatusParam, error) {
 	return SystemStatusParam{SetupCompleted: userCount > 0, DataDir: s.repo.DataDir, DBPath: s.repo.DBPath, Addr: "127.0.0.1:8080", Now: time.Now().Format(time.RFC3339)}, nil
 }
 
-// SetupInit 执行首次初始化。
-func (s *Service) SetupInit(ctx context.Context, req SetupInitParam) error {
-	logger.L().Info("开始首次初始化", zap.String("admin_login", consts.DefaultAdminLoginName), zap.String("child_name", req.ChildName), zap.Int("child_age", req.ChildAge))
+// SetupInit 执行首次初始化，只创建家庭和固定管理员账号，不初始化其他账号或孩子档案。
+func (s *Service) SetupInit(ctx context.Context, _ SetupInitParam) error {
+	logger.L().Info("开始首次初始化", zap.String("admin_login", consts.DefaultAdminLoginName))
 	var count int
 	if err := s.repo.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM users`).Scan(&count); err != nil {
 		return err
 	}
 	if count > 0 {
 		return errors.New("系统已初始化")
-	}
-	req.ChildName = strings.TrimSpace(req.ChildName)
-	if req.ChildName == "" || req.ChildAge <= 0 {
-		return errors.New("请填写孩子姓名和年龄")
 	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(consts.DefaultAdminPassword), bcrypt.DefaultCost)
 	if err != nil {
@@ -93,26 +89,14 @@ func (s *Service) SetupInit(ctx context.Context, req SetupInitParam) error {
 		return err
 	}
 	familyID, _ := res.LastInsertId()
-	if _, err := tx.ExecContext(ctx, `INSERT INTO users(family_id, child_id, display_name, role, login_name, password_hash) VALUES(?, NULL, '管理员', 'ADMIN', 'admin', ?)`, familyID, string(hash)); err != nil {
-		return err
-	}
-	res, err = tx.ExecContext(ctx, `INSERT INTO children(family_id, name, age, gender, profile_note) VALUES(?, ?, ?, 'BOY', ?)`, familyID, req.ChildName, req.ChildAge, "8-10 岁独生男孩家庭积分档案")
-	if err != nil {
-		return err
-	}
-	childID, _ := res.LastInsertId()
-	if _, err := tx.ExecContext(ctx, `INSERT INTO score_accounts(child_id, current_month) VALUES(?, ?)`, childID, utils.CurrentMonth()); err != nil {
-		return err
-	}
-	if err := repository.InsertDefaults(ctx, tx, familyID); err != nil {
-		logger.L().Error("初始化默认数据失败", zap.Error(err), zap.Int64("family_id", familyID))
+	if _, err := tx.ExecContext(ctx, `INSERT INTO users(family_id, child_id, display_name, role, login_name, password_hash, enabled) VALUES(?, NULL, '管理员', 'ADMIN', ?, ?, 1)`, familyID, consts.DefaultAdminLoginName, string(hash)); err != nil {
 		return err
 	}
 	if err := tx.Commit(); err != nil {
-		logger.L().Error("首次初始化事务提交失败", zap.Error(err), zap.Int64("family_id", familyID), zap.Int64("child_id", childID))
+		logger.L().Error("首次初始化事务提交失败", zap.Error(err), zap.Int64("family_id", familyID))
 		return err
 	}
-	logger.L().Info("首次初始化完成", zap.Int64("family_id", familyID), zap.Int64("child_id", childID), zap.String("admin_login", consts.DefaultAdminLoginName))
+	logger.L().Info("首次初始化完成", zap.Int64("family_id", familyID), zap.String("admin_login", consts.DefaultAdminLoginName))
 	return nil
 }
 
@@ -196,10 +180,12 @@ func (s *Service) Users(ctx context.Context, sess protocol.Session) ([]protocol.
 	if !CanOperate(sess) {
 		return nil, errors.New("只有管理员或家长可以查看用户")
 	}
-	query := `SELECT id, family_id, COALESCE(child_id, 0), role, login_name, display_name, enabled, created_at FROM users WHERE family_id = ? ORDER BY id DESC`
+	query := `SELECT id, family_id, COALESCE(child_id, 0), role, login_name, display_name, COALESCE(parent_title, ''), COALESCE(parent_group, ''), enabled, created_at FROM users WHERE family_id = ? ORDER BY id DESC`
 	args := []any{sess.FamilyID}
 	if sess.Role == consts.RoleParent {
-		query = `SELECT id, family_id, COALESCE(child_id, 0), role, login_name, display_name, enabled, created_at FROM users WHERE family_id = ? AND role = 'PARENT' AND enabled = 1 ORDER BY id DESC`
+		parentGroup := s.parentGroupOf(ctx, sess.FamilyID, sess.UserID)
+		query = `SELECT id, family_id, COALESCE(child_id, 0), role, login_name, display_name, COALESCE(parent_title, ''), COALESCE(parent_group, ''), enabled, created_at FROM users WHERE family_id = ? AND role = 'PARENT' AND enabled = 1 AND (id = ? OR (? <> '' AND parent_group = ?)) ORDER BY id DESC`
+		args = append(args, sess.UserID, parentGroup, parentGroup)
 	}
 	rows, err := s.repo.DB.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -209,7 +195,7 @@ func (s *Service) Users(ctx context.Context, sess protocol.Session) ([]protocol.
 	items := []protocol.User{}
 	for rows.Next() {
 		var it protocol.User
-		if err := rows.Scan(&it.ID, &it.FamilyID, &it.ChildID, &it.Role, &it.LoginName, &it.Name, &it.Enabled, &it.CreatedAt); err == nil {
+		if err := rows.Scan(&it.ID, &it.FamilyID, &it.ChildID, &it.Role, &it.LoginName, &it.Name, &it.ParentTitle, &it.ParentGroup, &it.Enabled, &it.CreatedAt); err == nil {
 			items = append(items, it)
 		}
 	}
@@ -236,15 +222,27 @@ func (s *Service) CreateUser(ctx context.Context, sess protocol.Session, req Cre
 	if req.Role == consts.RoleChild && !s.CanAccessChild(ctx, sess, req.ChildID) {
 		return 0, errors.New("无权绑定该孩子档案")
 	}
+	parentTitle := ""
+	parentGroup := ""
+	if req.Role == consts.RoleParent {
+		parentTitle = normalizeParentTitle(req.ParentTitle)
+		parentGroup = normalizeParentGroup(req.ParentGroup)
+		if req.DisplayName == "" {
+			req.DisplayName = parentTitle
+		}
+	}
 	if req.DisplayName == "" || req.LoginName == "" || len(req.Password) < 4 {
 		return 0, errors.New("用户名、登录名不能为空，密码至少 4 位")
+	}
+	if err := s.ensureGuardianGroup(ctx, sess.FamilyID, parentGroup); err != nil {
+		return 0, err
 	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
 		return 0, err
 	}
 	childID := sql.NullInt64{Int64: req.ChildID, Valid: req.Role == consts.RoleChild}
-	res, err := s.repo.DB.ExecContext(ctx, `INSERT INTO users(family_id, child_id, display_name, role, login_name, password_hash, enabled) VALUES(?, ?, ?, ?, ?, ?, 1)`, sess.FamilyID, childID, req.DisplayName, req.Role, req.LoginName, string(hash))
+	res, err := s.repo.DB.ExecContext(ctx, `INSERT INTO users(family_id, child_id, display_name, role, parent_title, parent_group, login_name, password_hash, enabled) VALUES(?, ?, ?, ?, ?, ?, ?, ?, 1)`, sess.FamilyID, childID, req.DisplayName, req.Role, parentTitle, parentGroup, req.LoginName, string(hash))
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE") {
 			return 0, errors.New("登录名已存在")
@@ -296,14 +294,15 @@ func (s *Service) Session(token string) (protocol.Session, bool) {
 
 // Children 查询家庭孩子列表。
 func (s *Service) Children(ctx context.Context, sess protocol.Session) ([]protocol.Child, error) {
-	query := `SELECT id, family_id, COALESCE(parent_user_id, 0), name, age, gender FROM children WHERE family_id = ? ORDER BY id`
+	query := `SELECT id, family_id, COALESCE(parent_user_id, 0), COALESCE(parent_group, ''), name, age, gender FROM children WHERE family_id = ? ORDER BY id`
 	args := []any{sess.FamilyID}
 	switch sess.Role {
 	case consts.RoleParent:
-		query = `SELECT id, family_id, COALESCE(parent_user_id, 0), name, age, gender FROM children WHERE family_id = ? AND parent_user_id = ? ORDER BY id`
-		args = append(args, sess.UserID)
+		parentGroup := s.parentGroupOf(ctx, sess.FamilyID, sess.UserID)
+		query = `SELECT id, family_id, COALESCE(parent_user_id, 0), COALESCE(parent_group, ''), name, age, gender FROM children WHERE family_id = ? AND (parent_user_id = ? OR (? <> '' AND parent_group = ?)) ORDER BY id`
+		args = append(args, sess.UserID, parentGroup, parentGroup)
 	case consts.RoleChild:
-		query = `SELECT id, family_id, COALESCE(parent_user_id, 0), name, age, gender FROM children WHERE family_id = ? AND id = ? ORDER BY id`
+		query = `SELECT id, family_id, COALESCE(parent_user_id, 0), COALESCE(parent_group, ''), name, age, gender FROM children WHERE family_id = ? AND id = ? ORDER BY id`
 		args = append(args, sess.ChildID)
 	}
 	rows, err := s.repo.DB.QueryContext(ctx, query, args...)
@@ -314,7 +313,7 @@ func (s *Service) Children(ctx context.Context, sess protocol.Session) ([]protoc
 	children := []protocol.Child{}
 	for rows.Next() {
 		var c protocol.Child
-		if err := rows.Scan(&c.ID, &c.FamilyID, &c.ParentUserID, &c.Name, &c.Age, &c.Gender); err == nil {
+		if err := rows.Scan(&c.ID, &c.FamilyID, &c.ParentUserID, &c.ParentGroup, &c.Name, &c.Age, &c.Gender); err == nil {
 			children = append(children, c)
 		}
 	}
@@ -390,7 +389,7 @@ func (s *Service) AuditTask(ctx context.Context, sess protocol.Session, taskID i
 		return protocol.Account{}, errors.New("只有管理员或家长可以执行该操作")
 	}
 	var t protocol.TaskInstance
-	err := s.repo.DB.QueryRowContext(ctx, `SELECT id, child_id, COALESCE(template_id, 0), task_name, task_type, category, score_value, target_account, status, submit_note, audit_note, task_date FROM task_instances WHERE id = ?`, taskID).Scan(&t.ID, &t.ChildID, &t.TemplateID, &t.TaskName, &t.TaskType, &t.Category, &t.ScoreValue, &t.TargetAccount, &t.Status, &t.SubmitNote, &t.AuditNote, &t.TaskDate)
+	err := s.repo.DB.QueryRowContext(ctx, `SELECT id, child_id, COALESCE(template_id, 0), task_name, task_type, category, COALESCE(subject, 'GENERAL'), COALESCE(content, ''), COALESCE(question_type, 'NONE'), COALESCE(answer, ''), score_value, target_account, status, submit_note, audit_note, task_date FROM task_instances WHERE id = ?`, taskID).Scan(&t.ID, &t.ChildID, &t.TemplateID, &t.TaskName, &t.TaskType, &t.Category, &t.Subject, &t.Content, &t.QuestionType, &t.Answer, &t.ScoreValue, &t.TargetAccount, &t.Status, &t.SubmitNote, &t.AuditNote, &t.TaskDate)
 	if err != nil {
 		return protocol.Account{}, errors.New("任务不存在")
 	}
@@ -457,7 +456,12 @@ func (s *Service) CreateTaskTemplate(ctx context.Context, sess protocol.Session,
 	req.TaskName = strings.TrimSpace(req.TaskName)
 	req.TaskType = strings.ToUpper(strings.TrimSpace(req.TaskType))
 	req.Category = strings.ToUpper(strings.TrimSpace(req.Category))
+	req.Subject = strings.ToUpper(strings.TrimSpace(req.Subject))
+	req.QuestionType = strings.ToUpper(strings.TrimSpace(req.QuestionType))
 	req.TargetAccount = strings.ToUpper(strings.TrimSpace(req.TargetAccount))
+	req.Content = strings.TrimSpace(req.Content)
+	req.Answer = strings.TrimSpace(req.Answer)
+	req.Description = strings.TrimSpace(req.Description)
 	if req.TaskName == "" || req.ScoreValue <= 0 {
 		return 0, errors.New("任务名称和分值不能为空")
 	}
@@ -465,12 +469,18 @@ func (s *Service) CreateTaskTemplate(ctx context.Context, sess protocol.Session,
 		req.TaskType = "DAILY"
 	}
 	if req.Category == "" {
-		req.Category = "STUDY"
+		req.Category = "ACTION"
+	}
+	if req.Subject == "" {
+		req.Subject = "GENERAL"
+	}
+	if req.QuestionType == "" {
+		req.QuestionType = "NONE"
 	}
 	if req.TargetAccount == "" {
 		req.TargetAccount = "AUTO"
 	}
-	res, err := s.repo.DB.ExecContext(ctx, `INSERT INTO task_templates(family_id, task_name, task_type, category, score_value, target_account, description) VALUES(?, ?, ?, ?, ?, ?, ?)`, sess.FamilyID, req.TaskName, req.TaskType, req.Category, req.ScoreValue, req.TargetAccount, req.Description)
+	res, err := s.repo.DB.ExecContext(ctx, `INSERT INTO task_templates(family_id, task_name, task_type, category, subject, content, question_type, answer, score_value, target_account, description) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, sess.FamilyID, req.TaskName, req.TaskType, req.Category, req.Subject, req.Content, req.QuestionType, req.Answer, req.ScoreValue, req.TargetAccount, req.Description)
 	if err != nil {
 		return 0, err
 	}
@@ -862,7 +872,7 @@ func (s *Service) listTodayTasks(ctx context.Context, sess protocol.Session, chi
 	if err := s.ensureTodayTasks(ctx, sess.FamilyID, childID); err != nil {
 		return nil, err
 	}
-	rows, err := s.repo.DB.QueryContext(ctx, `SELECT id, child_id, COALESCE(template_id, 0), task_name, task_type, category, score_value, target_account, status, submit_note, audit_note, task_date FROM task_instances WHERE child_id = ? AND task_date = DATE('now', 'localtime') ORDER BY id`, childID)
+	rows, err := s.repo.DB.QueryContext(ctx, `SELECT id, child_id, COALESCE(template_id, 0), task_name, task_type, category, COALESCE(subject, 'GENERAL'), COALESCE(content, ''), COALESCE(question_type, 'NONE'), COALESCE(answer, ''), score_value, target_account, status, submit_note, audit_note, task_date FROM task_instances WHERE child_id = ? AND task_date = DATE('now', 'localtime') ORDER BY id`, childID)
 	if err != nil {
 		return nil, err
 	}
@@ -870,7 +880,7 @@ func (s *Service) listTodayTasks(ctx context.Context, sess protocol.Session, chi
 	items := []protocol.TaskInstance{}
 	for rows.Next() {
 		var t protocol.TaskInstance
-		if err := rows.Scan(&t.ID, &t.ChildID, &t.TemplateID, &t.TaskName, &t.TaskType, &t.Category, &t.ScoreValue, &t.TargetAccount, &t.Status, &t.SubmitNote, &t.AuditNote, &t.TaskDate); err == nil {
+		if err := rows.Scan(&t.ID, &t.ChildID, &t.TemplateID, &t.TaskName, &t.TaskType, &t.Category, &t.Subject, &t.Content, &t.QuestionType, &t.Answer, &t.ScoreValue, &t.TargetAccount, &t.Status, &t.SubmitNote, &t.AuditNote, &t.TaskDate); err == nil {
 			items = append(items, t)
 		}
 	}
@@ -878,22 +888,22 @@ func (s *Service) listTodayTasks(ctx context.Context, sess protocol.Session, chi
 }
 
 func (s *Service) ensureTodayTasks(ctx context.Context, familyID, childID int64) error {
-	rows, err := s.repo.DB.QueryContext(ctx, `SELECT id, task_name, task_type, category, score_value, target_account FROM task_templates WHERE family_id = ? AND task_type IN ('DAILY', 'TEAM') AND enabled = 1`, familyID)
+	rows, err := s.repo.DB.QueryContext(ctx, `SELECT id, task_name, task_type, category, COALESCE(subject, 'GENERAL'), COALESCE(content, ''), COALESCE(question_type, 'NONE'), COALESCE(answer, ''), score_value, target_account FROM task_templates WHERE family_id = ? AND task_type IN ('DAILY', 'TEAM') AND enabled = 1`, familyID)
 	if err != nil {
 		return err
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var templateID int64
-		var name, typ, cat, target string
+		var name, typ, cat, subject, content, questionType, answer, target string
 		var score int
-		if err := rows.Scan(&templateID, &name, &typ, &cat, &score, &target); err != nil {
+		if err := rows.Scan(&templateID, &name, &typ, &cat, &subject, &content, &questionType, &answer, &score, &target); err != nil {
 			continue
 		}
 		var exists int
 		_ = s.repo.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM task_instances WHERE child_id = ? AND template_id = ? AND task_date = DATE('now', 'localtime')`, childID, templateID).Scan(&exists)
 		if exists == 0 {
-			_, err = s.repo.DB.ExecContext(ctx, `INSERT INTO task_instances(child_id, template_id, task_name, task_type, category, score_value, target_account, task_date) VALUES(?, ?, ?, ?, ?, ?, ?, DATE('now', 'localtime'))`, childID, templateID, name, typ, cat, score, target)
+			_, err = s.repo.DB.ExecContext(ctx, `INSERT INTO task_instances(child_id, template_id, task_name, task_type, category, subject, content, question_type, answer, score_value, target_account, task_date) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, DATE('now', 'localtime'))`, childID, templateID, name, typ, cat, subject, content, questionType, answer, score, target)
 			if err != nil {
 				return err
 			}
@@ -910,10 +920,37 @@ func (s *Service) CanAccessChild(ctx context.Context, sess protocol.Session, chi
 	query := `SELECT COUNT(*) FROM children WHERE id = ? AND family_id = ?`
 	args := []any{childID, sess.FamilyID}
 	if sess.Role == consts.RoleParent {
-		query = `SELECT COUNT(*) FROM children WHERE id = ? AND family_id = ? AND parent_user_id = ?`
-		args = append(args, sess.UserID)
+		parentGroup := s.parentGroupOf(ctx, sess.FamilyID, sess.UserID)
+		query = `SELECT COUNT(*) FROM children WHERE id = ? AND family_id = ? AND (parent_user_id = ? OR (? <> '' AND parent_group = ?))`
+		args = append(args, sess.UserID, parentGroup, parentGroup)
 	}
 	var count int
 	_ = s.repo.DB.QueryRowContext(ctx, query, args...).Scan(&count)
 	return count > 0
+}
+
+func (s *Service) parentGroupOf(ctx context.Context, familyID, userID int64) string {
+	var group string
+	_ = s.repo.DB.QueryRowContext(ctx, `SELECT COALESCE(parent_group, '') FROM users WHERE id = ? AND family_id = ? AND role = 'PARENT' AND enabled = 1`, userID, familyID).Scan(&group)
+	return group
+}
+
+func normalizeParentTitle(title string) string {
+	title = strings.TrimSpace(title)
+	allowed := map[string]struct{}{"爸爸": {}, "妈妈": {}, "爷爷": {}, "奶奶": {}, "姥姥": {}, "姥爷": {}}
+	if _, ok := allowed[title]; ok {
+		return title
+	}
+	return "爸爸"
+}
+
+func normalizeParentGroup(group string) string {
+	group = strings.TrimSpace(group)
+	if group == "" {
+		return "默认监护组"
+	}
+	if len([]rune(group)) > 32 {
+		return string([]rune(group)[:32])
+	}
+	return group
 }

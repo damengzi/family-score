@@ -19,7 +19,7 @@ function renderAuditCenter() {
       <div class="card">
         <div class="section-title"><div><h2>待确认任务</h2><p class="small">建议确认前先看孩子提交的说明，并给一句具体鼓励。</p></div><span class="tag">${tasks.length} 个</span></div>
         ${tasks.length ? `<div class="task-card-list">${tasks.map(t => `<div class="task-card pending">
-          <div class="task-main"><div class="task-icon">${taskIcon(t.category)}</div><div><b>${h(t.taskName)}</b><div class="small">${h(auditChildName(t.childId))} · ${h(taskCategoryName(t.category))} · +${h(t.scoreValue)} 分</div><p class="small">${h(t.submitNote || '孩子已提交完成')}</p></div></div>
+          <div class="task-main"><div class="task-icon">${taskIcon(t.category)}</div><div><b>${h(t.taskName)}</b><div class="small">${h(auditChildName(t.childId))} · ${h(taskCategoryName(t.category))} · ${h(taskSubjectName(t.subject))} · +${h(t.scoreValue)} 分</div><p class="small">${h(t.submitNote || '孩子已提交完成')}</p></div></div>
           <div class="task-side"><button data-audit-task="${t.id}">确认完成</button><button class="secondary" data-reject-task="${t.id}">再试一次</button></div>
         </div>`).join('')}</div>` : '<div class="empty-state"><div>✅</div><b>暂无待确认任务</b><p>孩子提交任务后会集中出现在这里。</p></div>'}
       </div>

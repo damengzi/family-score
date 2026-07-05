@@ -2,21 +2,18 @@ function renderSetup() {
   document.body.dataset.role = 'guest';
   app.innerHTML = `<div class="login"><div class="card">
     <h1>初始化家庭德育积分系统</h1>
-    <p class="small">数据将保存在本机：${h(state.status.dataDir)}。初始化后会自动创建系统管理员账号。</p>
+    <p class="small">数据将保存在本机：${h(state.status.dataDir)}。初始化只创建数据库结构和固定管理员账号，不会预置家长、孩子或其他账号。</p>
     <div id="setupError" class="small" style="color:#e05260;margin-bottom:10px"></div>
     <form class="form" id="setupForm">
-      <div class="field"><label>孩子姓名</label><input name="childName" value="小朋友" required></div>
-      <div class="field"><label>孩子年龄</label><input name="childAge" type="number" value="8" min="1" required></div>
+      <div class="notice">点击后创建管理员账号；家长、孩子和任务奖励可登录后再配置。</div>
       <button>完成初始化</button>
     </form>
   </div></div>`;
   document.getElementById('setupForm').onsubmit = async (e) => {
     e.preventDefault();
     setError('setupError', '');
-    const body = Object.fromEntries(new FormData(e.target));
-    body.childAge = Number(body.childAge);
     try {
-      await api('/api/setup/init', { method: 'POST', body });
+      await api('/api/setup/init', { method: 'POST', body: {} });
       toast('初始化完成，请登录');
       await boot();
     } catch (err) { setError('setupError', err.message); toast(err.message); }

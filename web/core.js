@@ -1,5 +1,5 @@
 const app = document.getElementById('app');
-let state = { status: null, me: null, profile: null, children: [], childId: null, dashboard: null, childDashboards: {}, records: [], rewards: [], taskTemplates: [], exchangeOrders: [], users: [], tab: 'overview' };
+let state = { status: null, me: null, profile: null, children: [], childId: null, dashboard: null, childDashboards: {}, records: [], rewards: [], taskTemplates: [], exchangeOrders: [], users: [], guardianGroups: [], tab: 'overview' };
 let appPrefs = loadPrefs();
 let globalClockTimer = null;
 let globalClockMode = 'digital';
@@ -206,6 +206,7 @@ async function loadAll() {
   if (canOperate()) {
     reqs.push(api('/api/task-templates').then(data => result.taskTemplates = data.taskTemplates || []));
     reqs.push(api('/api/users').then(data => result.users = data.users || []));
+    reqs.push(api('/api/guardian-groups').then(data => result.guardianGroups = data.guardianGroups || []));
     reqs.push(Promise.allSettled(state.children.map(c => api(`/api/children/${c.id}/dashboard`).then(data => { childDashboards[c.id] = data; }))));
   }
   if (state.childId) {
@@ -218,6 +219,7 @@ async function loadAll() {
   state.exchangeOrders = result.exchangeOrders || [];
   state.taskTemplates = result.taskTemplates || [];
   state.users = result.users || [];
+  state.guardianGroups = result.guardianGroups || [];
   state.dashboard = result.dashboard || null;
   state.childDashboards = childDashboards;
   if (state.childId && state.dashboard && !state.childDashboards[state.childId]) state.childDashboards[state.childId] = state.dashboard;

@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"strings"
 
@@ -31,16 +32,9 @@ func (s *Service) CreateChild(ctx context.Context, sess protocol.Session, req Cr
 	if req.Gender != "BOY" && req.Gender != "GIRL" {
 		return 0, errors.New("性别只能是 BOY 或 GIRL")
 	}
-	parentUserID := req.ParentUserID
-	if parentUserID <= 0 {
-		parentUserID = sess.UserID
-	}
-	var parentCount int
-	if err := s.repo.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM users WHERE id = ? AND family_id = ? AND role = 'PARENT' AND enabled = 1`, parentUserID, sess.FamilyID).Scan(&parentCount); err != nil {
+	parentUserID, parentGroup, err := s.resolveChildBinding(ctx, sess, req.ParentUserID, req.ParentGroup)
+	if err != nil {
 		return 0, err
-	}
-	if parentCount == 0 {
-		return 0, errors.New("归属家长不存在或未启用")
 	}
 	withChildAccount := req.ChildLoginName != "" || req.ChildPassword != ""
 	if withChildAccount && (req.ChildLoginName == "" || len(req.ChildPassword) < 4) {
@@ -51,7 +45,7 @@ func (s *Service) CreateChild(ctx context.Context, sess protocol.Session, req Cr
 		return 0, err
 	}
 	defer tx.Rollback()
-	res, err := tx.ExecContext(ctx, `INSERT INTO children(family_id, parent_user_id, name, age, gender, profile_note) VALUES(?, ?, ?, ?, ?, ?)`, sess.FamilyID, parentUserID, req.Name, req.Age, req.Gender, "家长名下孩子档案")
+	res, err := tx.ExecContext(ctx, `INSERT INTO children(family_id, parent_user_id, parent_group, name, age, gender, profile_note) VALUES(?, ?, ?, ?, ?, ?, ?)`, sess.FamilyID, nullableParentID(parentUserID), parentGroup, req.Name, req.Age, req.Gender, "家长名下孩子档案")
 	if err != nil {
 		return 0, err
 	}
@@ -98,29 +92,58 @@ func (s *Service) UpdateChild(ctx context.Context, sess protocol.Session, childI
 	if req.Gender != "BOY" && req.Gender != "GIRL" {
 		return protocol.Child{}, errors.New("性别只能是 BOY 或 GIRL")
 	}
-	parentUserID := req.ParentUserID
-	if parentUserID <= 0 {
-		parentUserID = sess.UserID
-	}
-	var parentCount int
-	if err := s.repo.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM users WHERE id = ? AND family_id = ? AND role = 'PARENT' AND enabled = 1`, parentUserID, sess.FamilyID).Scan(&parentCount); err != nil {
+	parentUserID, parentGroup, err := s.resolveChildBinding(ctx, sess, req.ParentUserID, req.ParentGroup)
+	if err != nil {
 		return protocol.Child{}, err
 	}
-	if parentCount == 0 {
-		return protocol.Child{}, errors.New("归属家长不存在或未启用")
+	if err := s.ensureGuardianGroup(ctx, sess.FamilyID, parentGroup); err != nil {
+		return protocol.Child{}, err
 	}
-	res, err := s.repo.DB.ExecContext(ctx, `UPDATE children SET name = ?, age = ?, gender = ?, parent_user_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND family_id = ?`, req.Name, req.Age, req.Gender, parentUserID, childID, sess.FamilyID)
+	res, err := s.repo.DB.ExecContext(ctx, `UPDATE children SET name = ?, age = ?, gender = ?, parent_user_id = ?, parent_group = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND family_id = ?`, req.Name, req.Age, req.Gender, nullableParentID(parentUserID), parentGroup, childID, sess.FamilyID)
 	if err != nil {
 		return protocol.Child{}, err
 	}
 	if n, _ := res.RowsAffected(); n == 0 {
 		return protocol.Child{}, errors.New("孩子档案不存在")
 	}
-	logger.L().Info("修改孩子档案", zap.Int64("child_id", childID), zap.Int64("parent_user_id", parentUserID), zap.Int64("operator_id", sess.UserID))
-	return protocol.Child{ID: childID, FamilyID: sess.FamilyID, ParentUserID: parentUserID, Name: req.Name, Age: req.Age, Gender: req.Gender}, nil
+	logger.L().Info("修改孩子档案", zap.Int64("child_id", childID), zap.Int64("parent_user_id", parentUserID), zap.String("parent_group", parentGroup), zap.Int64("operator_id", sess.UserID))
+	return protocol.Child{ID: childID, FamilyID: sess.FamilyID, ParentUserID: parentUserID, ParentGroup: parentGroup, Name: req.Name, Age: req.Age, Gender: req.Gender}, nil
 }
 
 // DeleteChild 删除孩子档案及其关联数据。
+func (s *Service) resolveChildBinding(ctx context.Context, sess protocol.Session, requestedParentID int64, requestedGroup string) (int64, string, error) {
+	parentUserID := requestedParentID
+	parentGroup := strings.TrimSpace(requestedGroup)
+	if sess.Role == consts.RoleParent {
+		parentUserID = sess.UserID
+		ownGroup := s.parentGroupOf(ctx, sess.FamilyID, sess.UserID)
+		if parentGroup == "" {
+			parentGroup = ownGroup
+		}
+		if ownGroup != "" && parentGroup != ownGroup {
+			return 0, "", errors.New("家长只能绑定到自己的监护组")
+		}
+	}
+	if parentUserID > 0 {
+		var group string
+		if err := s.repo.DB.QueryRowContext(ctx, `SELECT COALESCE(parent_group, '') FROM users WHERE id = ? AND family_id = ? AND role = 'PARENT' AND enabled = 1`, parentUserID, sess.FamilyID).Scan(&group); err != nil {
+			return 0, "", errors.New("归属家长不存在或未启用")
+		}
+		if parentGroup == "" {
+			parentGroup = group
+		}
+	}
+	parentGroup = strings.TrimSpace(parentGroup)
+	if len([]rune(parentGroup)) > 32 {
+		parentGroup = string([]rune(parentGroup)[:32])
+	}
+	return parentUserID, parentGroup, nil
+}
+
+func nullableParentID(parentUserID int64) sql.NullInt64 {
+	return sql.NullInt64{Int64: parentUserID, Valid: parentUserID > 0}
+}
+
 func (s *Service) DeleteChild(ctx context.Context, sess protocol.Session, childID int64) error {
 	if !CanOperate(sess) {
 		return errors.New("只有管理员或家长可以删除孩子")

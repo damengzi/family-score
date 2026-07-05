@@ -61,13 +61,13 @@ func (r *Repository) Migrate(ctx context.Context) error {
 	stmts := []string{
 		`CREATE TABLE IF NOT EXISTS schema_migrations (version VARCHAR(64) PRIMARY KEY, description VARCHAR(256) NOT NULL DEFAULT '', applied_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP);`,
 		`CREATE TABLE IF NOT EXISTS families (id INTEGER PRIMARY KEY AUTOINCREMENT, name VARCHAR(128) NOT NULL, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP);`,
-		`CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, family_id INTEGER NOT NULL, child_id INTEGER NULL, display_name VARCHAR(64) NOT NULL, role VARCHAR(32) NOT NULL, login_name VARCHAR(64) NOT NULL UNIQUE, password_hash VARCHAR(256) NOT NULL, enabled INTEGER NOT NULL DEFAULT 1, failed_login_date VARCHAR(10) NOT NULL DEFAULT '', failed_login_count INTEGER NOT NULL DEFAULT 0, locked_until TIMESTAMP NULL, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP);`,
-		`CREATE TABLE IF NOT EXISTS children (id INTEGER PRIMARY KEY AUTOINCREMENT, family_id INTEGER NOT NULL, parent_user_id INTEGER NULL, name VARCHAR(64) NOT NULL, age INTEGER NOT NULL, gender VARCHAR(16) NOT NULL, profile_note VARCHAR(512) NOT NULL DEFAULT '', created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP);`,
+		`CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, family_id INTEGER NOT NULL, child_id INTEGER NULL, display_name VARCHAR(64) NOT NULL, role VARCHAR(32) NOT NULL, parent_title VARCHAR(32) NOT NULL DEFAULT '', parent_group VARCHAR(64) NOT NULL DEFAULT '', login_name VARCHAR(64) NOT NULL UNIQUE, password_hash VARCHAR(256) NOT NULL, enabled INTEGER NOT NULL DEFAULT 1, failed_login_date VARCHAR(10) NOT NULL DEFAULT '', failed_login_count INTEGER NOT NULL DEFAULT 0, locked_until TIMESTAMP NULL, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP);`,
+		`CREATE TABLE IF NOT EXISTS children (id INTEGER PRIMARY KEY AUTOINCREMENT, family_id INTEGER NOT NULL, parent_user_id INTEGER NULL, parent_group VARCHAR(64) NOT NULL DEFAULT '', name VARCHAR(64) NOT NULL, age INTEGER NOT NULL, gender VARCHAR(16) NOT NULL, profile_note VARCHAR(512) NOT NULL DEFAULT '', created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP);`,
 		`CREATE TABLE IF NOT EXISTS score_accounts (id INTEGER PRIMARY KEY AUTOINCREMENT, child_id INTEGER NOT NULL, base_score INTEGER NOT NULL DEFAULT 100, bonus_score INTEGER NOT NULL DEFAULT 0, star_count INTEGER NOT NULL DEFAULT 0, team_score INTEGER NOT NULL DEFAULT 0, status_level VARCHAR(32) NOT NULL DEFAULT 'GREEN', current_month VARCHAR(7) NOT NULL, last_exchange_date DATE NULL, appeal_count_this_week INTEGER NOT NULL DEFAULT 0, version INTEGER NOT NULL DEFAULT 0, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, UNIQUE(child_id, current_month));`,
 		`CREATE TABLE IF NOT EXISTS score_records (id INTEGER PRIMARY KEY AUTOINCREMENT, child_id INTEGER NOT NULL, account_id INTEGER NOT NULL, record_type VARCHAR(32) NOT NULL, target_account VARCHAR(32) NOT NULL, item_name VARCHAR(128) NOT NULL, score_change INTEGER NOT NULL, before_value INTEGER NOT NULL, after_value INTEGER NOT NULL, operator_role VARCHAR(32) NOT NULL, operator_id INTEGER NULL, reason VARCHAR(512) NOT NULL, evidence VARCHAR(1024) NOT NULL DEFAULT '', confirm_status VARCHAR(32) NOT NULL DEFAULT 'CONFIRMED', occurred_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP);`,
 		`CREATE INDEX IF NOT EXISTS idx_score_records_child_time ON score_records(child_id, occurred_at);`,
-		`CREATE TABLE IF NOT EXISTS task_templates (id INTEGER PRIMARY KEY AUTOINCREMENT, family_id INTEGER NOT NULL, task_name VARCHAR(128) NOT NULL, task_type VARCHAR(32) NOT NULL, category VARCHAR(32) NOT NULL, score_value INTEGER NOT NULL, target_account VARCHAR(32) NOT NULL, need_parent_confirm INTEGER NOT NULL DEFAULT 1, daily_limit INTEGER NOT NULL DEFAULT 1, weekly_limit INTEGER NOT NULL DEFAULT 0, enabled INTEGER NOT NULL DEFAULT 1, description VARCHAR(512) NOT NULL DEFAULT '', created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP);`,
-		`CREATE TABLE IF NOT EXISTS task_instances (id INTEGER PRIMARY KEY AUTOINCREMENT, child_id INTEGER NOT NULL, template_id INTEGER NULL, task_name VARCHAR(128) NOT NULL, task_type VARCHAR(32) NOT NULL, category VARCHAR(32) NOT NULL, score_value INTEGER NOT NULL, target_account VARCHAR(32) NOT NULL, status VARCHAR(32) NOT NULL DEFAULT 'TODO', submit_note VARCHAR(512) NOT NULL DEFAULT '', audit_note VARCHAR(512) NOT NULL DEFAULT '', task_date DATE NOT NULL, submitted_at TIMESTAMP NULL, audited_at TIMESTAMP NULL, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP);`,
+		`CREATE TABLE IF NOT EXISTS task_templates (id INTEGER PRIMARY KEY AUTOINCREMENT, family_id INTEGER NOT NULL, task_name VARCHAR(128) NOT NULL, task_type VARCHAR(32) NOT NULL, category VARCHAR(32) NOT NULL, subject VARCHAR(32) NOT NULL DEFAULT 'GENERAL', content VARCHAR(2048) NOT NULL DEFAULT '', question_type VARCHAR(32) NOT NULL DEFAULT 'NONE', answer VARCHAR(512) NOT NULL DEFAULT '', score_value INTEGER NOT NULL, target_account VARCHAR(32) NOT NULL, need_parent_confirm INTEGER NOT NULL DEFAULT 1, daily_limit INTEGER NOT NULL DEFAULT 1, weekly_limit INTEGER NOT NULL DEFAULT 0, enabled INTEGER NOT NULL DEFAULT 1, description VARCHAR(512) NOT NULL DEFAULT '', created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP);`,
+		`CREATE TABLE IF NOT EXISTS task_instances (id INTEGER PRIMARY KEY AUTOINCREMENT, child_id INTEGER NOT NULL, template_id INTEGER NULL, task_name VARCHAR(128) NOT NULL, task_type VARCHAR(32) NOT NULL, category VARCHAR(32) NOT NULL, subject VARCHAR(32) NOT NULL DEFAULT 'GENERAL', content VARCHAR(2048) NOT NULL DEFAULT '', question_type VARCHAR(32) NOT NULL DEFAULT 'NONE', answer VARCHAR(512) NOT NULL DEFAULT '', score_value INTEGER NOT NULL, target_account VARCHAR(32) NOT NULL, status VARCHAR(32) NOT NULL DEFAULT 'TODO', submit_note VARCHAR(512) NOT NULL DEFAULT '', audit_note VARCHAR(512) NOT NULL DEFAULT '', task_date DATE NOT NULL, submitted_at TIMESTAMP NULL, audited_at TIMESTAMP NULL, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP);`,
 		`CREATE INDEX IF NOT EXISTS idx_task_instances_child_date ON task_instances(child_id, task_date);`,
 		`CREATE TABLE IF NOT EXISTS rewards (id INTEGER PRIMARY KEY AUTOINCREMENT, family_id INTEGER NOT NULL, reward_name VARCHAR(128) NOT NULL, reward_type VARCHAR(32) NOT NULL, cost_score INTEGER NOT NULL DEFAULT 0, cost_star INTEGER NOT NULL DEFAULT 0, weekly_limit INTEGER NOT NULL DEFAULT 0, monthly_limit INTEGER NOT NULL DEFAULT 0, health_risk VARCHAR(32) NOT NULL DEFAULT 'NONE', need_parent_confirm INTEGER NOT NULL DEFAULT 1, enabled INTEGER NOT NULL DEFAULT 1, description VARCHAR(512) NOT NULL DEFAULT '', created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP);`,
 		`CREATE TABLE IF NOT EXISTS exchange_orders (id INTEGER PRIMARY KEY AUTOINCREMENT, child_id INTEGER NOT NULL, reward_id INTEGER NOT NULL, cost_score INTEGER NOT NULL DEFAULT 0, cost_star INTEGER NOT NULL DEFAULT 0, status VARCHAR(32) NOT NULL DEFAULT 'PENDING', apply_note VARCHAR(512) NOT NULL DEFAULT '', audit_note VARCHAR(512) NOT NULL DEFAULT '', applied_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, audited_at TIMESTAMP NULL, completed_at TIMESTAMP NULL, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP);`,
@@ -75,6 +75,7 @@ func (r *Repository) Migrate(ctx context.Context) error {
 		`CREATE TABLE IF NOT EXISTS weekly_reviews (id INTEGER PRIMARY KEY AUTOINCREMENT, child_id INTEGER NOT NULL, week_start DATE NOT NULL, week_end DATE NOT NULL, add_score INTEGER NOT NULL DEFAULT 0, deduct_score INTEGER NOT NULL DEFAULT 0, repair_score INTEGER NOT NULL DEFAULT 0, task_complete_count INTEGER NOT NULL DEFAULT 0, exchange_count INTEGER NOT NULL DEFAULT 0, summary VARCHAR(1024) NOT NULL DEFAULT '', parent_note VARCHAR(1024) NOT NULL DEFAULT '', created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, UNIQUE(child_id, week_start, week_end));`,
 		`CREATE TABLE IF NOT EXISTS monthly_settlements (id INTEGER PRIMARY KEY AUTOINCREMENT, child_id INTEGER NOT NULL, month VARCHAR(7) NOT NULL, base_score_before_reset INTEGER NOT NULL, bonus_score_before_clear INTEGER NOT NULL, converted_stars INTEGER NOT NULL DEFAULT 0, cleared_bonus_score INTEGER NOT NULL DEFAULT 0, team_score INTEGER NOT NULL DEFAULT 0, team_level VARCHAR(32) NOT NULL, settlement_status VARCHAR(32) NOT NULL DEFAULT 'DONE', created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, UNIQUE(child_id, month));`,
 		`CREATE TABLE IF NOT EXISTS family_configs (id INTEGER PRIMARY KEY AUTOINCREMENT, family_id INTEGER NOT NULL, config_key VARCHAR(128) NOT NULL, config_value VARCHAR(256) NOT NULL, description VARCHAR(512) NOT NULL DEFAULT '', created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, UNIQUE(family_id, config_key));`,
+		`CREATE TABLE IF NOT EXISTS guardian_groups (id INTEGER PRIMARY KEY AUTOINCREMENT, family_id INTEGER NOT NULL, name VARCHAR(64) NOT NULL, description VARCHAR(512) NOT NULL DEFAULT '', created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, UNIQUE(family_id, name));`,
 		`CREATE TABLE IF NOT EXISTS backup_records (id INTEGER PRIMARY KEY AUTOINCREMENT, operation_type VARCHAR(32) NOT NULL, file_path VARCHAR(1024) NOT NULL, file_size INTEGER NOT NULL DEFAULT 0, status VARCHAR(32) NOT NULL, operator_id INTEGER NULL, remark VARCHAR(512) NOT NULL DEFAULT '', created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP);`,
 	}
 	logger.L().Info("开始执行数据库迁移", zap.Int("statement_count", len(stmts)))
@@ -98,6 +99,29 @@ func (r *Repository) Migrate(ctx context.Context) error {
 	}
 	if err := addColumnIfMissing(ctx, r.DB, "users", "locked_until", "TIMESTAMP NULL"); err != nil {
 		return err
+	}
+	if err := addColumnIfMissing(ctx, r.DB, "users", "parent_title", "VARCHAR(32) NOT NULL DEFAULT ''"); err != nil {
+		return err
+	}
+	if err := addColumnIfMissing(ctx, r.DB, "users", "parent_group", "VARCHAR(64) NOT NULL DEFAULT ''"); err != nil {
+		return err
+	}
+	if err := addColumnIfMissing(ctx, r.DB, "children", "parent_group", "VARCHAR(64) NOT NULL DEFAULT ''"); err != nil {
+		return err
+	}
+	for _, table := range []string{"task_templates", "task_instances"} {
+		if err := addColumnIfMissing(ctx, r.DB, table, "subject", "VARCHAR(32) NOT NULL DEFAULT 'GENERAL'"); err != nil {
+			return err
+		}
+		if err := addColumnIfMissing(ctx, r.DB, table, "content", "VARCHAR(2048) NOT NULL DEFAULT ''"); err != nil {
+			return err
+		}
+		if err := addColumnIfMissing(ctx, r.DB, table, "question_type", "VARCHAR(32) NOT NULL DEFAULT 'NONE'"); err != nil {
+			return err
+		}
+		if err := addColumnIfMissing(ctx, r.DB, table, "answer", "VARCHAR(512) NOT NULL DEFAULT ''"); err != nil {
+			return err
+		}
 	}
 	if err := normalizeDefaultTaskScores(ctx, r.DB); err != nil {
 		return err
@@ -125,12 +149,6 @@ func normalizeDefaultTaskScores(ctx context.Context, db *sql.DB) error {
 			return err
 		}
 	}
-	_, _ = db.ExecContext(ctx, `INSERT INTO task_templates(family_id, task_name, task_type, category, score_value, target_account, description)
-		SELECT id, '饭前摆碗筷', 'DAILY', 'HOUSEWORK', 1, 'AUTO', '主动参与饭前准备' FROM families
-		WHERE NOT EXISTS (SELECT 1 FROM task_templates WHERE task_name = '饭前摆碗筷' AND task_type = 'DAILY')`)
-	_, _ = db.ExecContext(ctx, `INSERT INTO task_templates(family_id, task_name, task_type, category, score_value, target_account, description)
-		SELECT id, '主动喝水达标', 'DAILY', 'HEALTH', 1, 'AUTO', '按约定完成喝水目标' FROM families
-		WHERE NOT EXISTS (SELECT 1 FROM task_templates WHERE task_name = '主动喝水达标' AND task_type = 'DAILY')`)
 	return nil
 }
 

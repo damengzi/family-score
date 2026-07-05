@@ -25,11 +25,13 @@ func (s *Service) UpdateUser(ctx context.Context, sess protocol.Session, userID 
 	}
 	var current protocol.User
 	var passwordHash string
-	err := s.repo.DB.QueryRowContext(ctx, `SELECT id, family_id, COALESCE(child_id, 0), role, login_name, display_name, password_hash, enabled, created_at FROM users WHERE id = ? AND family_id = ?`, userID, sess.FamilyID).Scan(&current.ID, &current.FamilyID, &current.ChildID, &current.Role, &current.LoginName, &current.Name, &passwordHash, &current.Enabled, &current.CreatedAt)
+	err := s.repo.DB.QueryRowContext(ctx, `SELECT id, family_id, COALESCE(child_id, 0), role, login_name, display_name, COALESCE(parent_title, ''), COALESCE(parent_group, ''), password_hash, enabled, created_at FROM users WHERE id = ? AND family_id = ?`, userID, sess.FamilyID).Scan(&current.ID, &current.FamilyID, &current.ChildID, &current.Role, &current.LoginName, &current.Name, &current.ParentTitle, &current.ParentGroup, &passwordHash, &current.Enabled, &current.CreatedAt)
 	if err != nil {
 		return protocol.User{}, errors.New("用户不存在")
 	}
 	childID := sql.NullInt64{}
+	parentTitle := ""
+	parentGroup := ""
 	if current.Role == consts.RoleChild {
 		if req.ChildID <= 0 {
 			return protocol.User{}, errors.New("孩子账号必须绑定孩子档案")
@@ -38,6 +40,13 @@ func (s *Service) UpdateUser(ctx context.Context, sess protocol.Session, userID 
 			return protocol.User{}, errors.New("无权绑定该孩子档案")
 		}
 		childID = sql.NullInt64{Int64: req.ChildID, Valid: true}
+	}
+	if current.Role == consts.RoleParent {
+		parentTitle = normalizeParentTitle(req.ParentTitle)
+		parentGroup = normalizeParentGroup(req.ParentGroup)
+	}
+	if err := s.ensureGuardianGroup(ctx, sess.FamilyID, parentGroup); err != nil {
+		return protocol.User{}, err
 	}
 	newHash := passwordHash
 	if strings.TrimSpace(req.Password) != "" {
@@ -50,13 +59,15 @@ func (s *Service) UpdateUser(ctx context.Context, sess protocol.Session, userID 
 		}
 		newHash = string(hash)
 	}
-	_, err = s.repo.DB.ExecContext(ctx, `UPDATE users SET display_name = ?, child_id = ?, password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND family_id = ?`, req.DisplayName, childID, newHash, userID, sess.FamilyID)
+	_, err = s.repo.DB.ExecContext(ctx, `UPDATE users SET display_name = ?, child_id = ?, parent_title = ?, parent_group = ?, password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND family_id = ?`, req.DisplayName, childID, parentTitle, parentGroup, newHash, userID, sess.FamilyID)
 	if err != nil {
 		return protocol.User{}, err
 	}
 	updated := current
 	updated.Name = req.DisplayName
 	updated.ChildID = 0
+	updated.ParentTitle = parentTitle
+	updated.ParentGroup = parentGroup
 	if childID.Valid {
 		updated.ChildID = childID.Int64
 	}

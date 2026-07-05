@@ -214,7 +214,7 @@ function scoreDeltaText(v) {
 }
 
 function taskIcon(category) {
-  return ({STUDY:'📚',SELF_CARE:'🎒',HOUSEWORK:'🧹',EMOTION:'💛',HEALTH:'🏃',SAFETY:'🛡️'}[category] || '🧩');
+  return ({ACTION:'✅',READING:'📖',MATH:'🧮',STUDY:'📚',SELF_CARE:'🎒',HOUSEWORK:'🧹',EMOTION:'💛',HEALTH:'🏃',SAFETY:'🛡️'}[category] || '🧩');
 }
 
 function rewardIcon(type) {

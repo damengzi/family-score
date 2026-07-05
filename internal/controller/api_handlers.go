@@ -122,6 +122,53 @@ func (c *Controller) ChangeMyPassword(w http.ResponseWriter, r *http.Request, se
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
+// GuardianGroups 查询监护组列表。
+func (c *Controller) GuardianGroups(w http.ResponseWriter, r *http.Request, sess protocol.Session) {
+	groups, err := c.svc.GuardianGroups(r.Context(), sess)
+	if err != nil {
+		errorJSON(w, http.StatusForbidden, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"guardianGroups": groups})
+}
+
+// CreateGuardianGroup 创建监护组。
+func (c *Controller) CreateGuardianGroup(w http.ResponseWriter, r *http.Request, sess protocol.Session) {
+	var req protocol.CreateGuardianGroupParam
+	if !readJSON(w, r, &req) {
+		return
+	}
+	id, err := c.svc.CreateGuardianGroup(r.Context(), sess, req)
+	if err != nil {
+		errorJSON(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"id": id})
+}
+
+// UpdateGuardianGroup 修改监护组。
+func (c *Controller) UpdateGuardianGroup(w http.ResponseWriter, r *http.Request, sess protocol.Session, id int64) {
+	var req protocol.UpdateGuardianGroupParam
+	if !readJSON(w, r, &req) {
+		return
+	}
+	group, err := c.svc.UpdateGuardianGroup(r.Context(), sess, id, req)
+	if err != nil {
+		errorJSON(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"guardianGroup": group})
+}
+
+// DeleteGuardianGroup 删除监护组。
+func (c *Controller) DeleteGuardianGroup(w http.ResponseWriter, r *http.Request, sess protocol.Session, id int64) {
+	if err := c.svc.DeleteGuardianGroup(r.Context(), sess, id); err != nil {
+		errorJSON(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
 // Users 查询用户列表。
 func (c *Controller) Users(w http.ResponseWriter, r *http.Request, sess protocol.Session) {
 	users, err := c.svc.Users(r.Context(), sess)

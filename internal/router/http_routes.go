@@ -126,6 +126,14 @@ func dispatchAPI(ctrl *controller.Controller, c *gin.Context) {
 		ctrl.Profile(w, r, sess)
 	case path == "profile/password" && r.Method == http.MethodPost:
 		ctrl.ChangeMyPassword(w, r, sess)
+	case path == "guardian-groups" && r.Method == http.MethodGet:
+		ctrl.GuardianGroups(w, r, sess)
+	case path == "guardian-groups" && r.Method == http.MethodPost:
+		ctrl.CreateGuardianGroup(w, r, sess)
+	case len(parts) == 2 && parts[0] == "guardian-groups" && r.Method == http.MethodPatch:
+		ctrl.UpdateGuardianGroup(w, r, sess, parseID(parts[1]))
+	case len(parts) == 2 && parts[0] == "guardian-groups" && r.Method == http.MethodDelete:
+		ctrl.DeleteGuardianGroup(w, r, sess, parseID(parts[1]))
 	case path == "users" && r.Method == http.MethodGet:
 		ctrl.Users(w, r, sess)
 	case path == "users" && r.Method == http.MethodPost:

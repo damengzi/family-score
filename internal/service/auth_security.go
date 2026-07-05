@@ -19,7 +19,7 @@ import (
 // Profile 查询当前登录用户的个人主页基础信息。
 func (s *Service) Profile(ctx context.Context, sess protocol.Session) (protocol.Profile, error) {
 	var user protocol.User
-	err := s.repo.DB.QueryRowContext(ctx, `SELECT id, family_id, COALESCE(child_id, 0), role, login_name, display_name, enabled, created_at FROM users WHERE id = ? AND family_id = ? AND enabled = 1`, sess.UserID, sess.FamilyID).Scan(&user.ID, &user.FamilyID, &user.ChildID, &user.Role, &user.LoginName, &user.Name, &user.Enabled, &user.CreatedAt)
+	err := s.repo.DB.QueryRowContext(ctx, `SELECT id, family_id, COALESCE(child_id, 0), role, login_name, display_name, COALESCE(parent_title, ''), COALESCE(parent_group, ''), enabled, created_at FROM users WHERE id = ? AND family_id = ? AND enabled = 1`, sess.UserID, sess.FamilyID).Scan(&user.ID, &user.FamilyID, &user.ChildID, &user.Role, &user.LoginName, &user.Name, &user.ParentTitle, &user.ParentGroup, &user.Enabled, &user.CreatedAt)
 	if err != nil {
 		return protocol.Profile{}, errors.New("用户不存在或已注销")
 	}
@@ -76,7 +76,7 @@ func (s *Service) Login(ctx context.Context, loginName, password string) (string
 	var failedDate string
 	var failedCount int
 	var lockedUntil string
-	err := s.repo.DB.QueryRowContext(ctx, `SELECT id, family_id, COALESCE(child_id, 0), role, login_name, display_name, password_hash, COALESCE(failed_login_date, ''), failed_login_count, COALESCE(locked_until, '') FROM users WHERE login_name = ? AND enabled = 1`, loginName).Scan(&user.ID, &user.FamilyID, &user.ChildID, &user.Role, &user.LoginName, &user.Name, &hash, &failedDate, &failedCount, &lockedUntil)
+	err := s.repo.DB.QueryRowContext(ctx, `SELECT id, family_id, COALESCE(child_id, 0), role, login_name, display_name, COALESCE(parent_title, ''), COALESCE(parent_group, ''), password_hash, COALESCE(failed_login_date, ''), failed_login_count, COALESCE(locked_until, '') FROM users WHERE login_name = ? AND enabled = 1`, loginName).Scan(&user.ID, &user.FamilyID, &user.ChildID, &user.Role, &user.LoginName, &user.Name, &user.ParentTitle, &user.ParentGroup, &hash, &failedDate, &failedCount, &lockedUntil)
 	if err != nil {
 		logger.L().Warn("用户登录失败", zap.String("login_name", loginName), zap.Error(err))
 		return "", protocol.Session{}, errors.New("账号或密码错误")
