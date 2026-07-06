@@ -1,5 +1,5 @@
 const app = document.getElementById('app');
-let state = { status: null, me: null, profile: null, children: [], childId: null, dashboard: null, childDashboards: {}, records: [], rewards: [], taskTemplates: [], exchangeOrders: [], users: [], guardianGroups: [], tab: 'overview' };
+let state = { status: null, me: null, profile: null, children: [], childId: null, dashboard: null, childDashboards: {}, records: [], rewards: [], taskTemplates: [], exchangeOrders: [], wishes: [], appeals: [], users: [], guardianGroups: [], tab: 'overview' };
 let appPrefs = loadPrefs();
 let globalClockTimer = null;
 let globalClockMode = 'digital';
@@ -202,6 +202,8 @@ async function loadAll() {
     api('/api/profile').then(data => result.profile = data.profile || null),
     api('/api/rewards').then(data => result.rewards = data.rewards || []),
     api('/api/exchange-orders').then(data => result.exchangeOrders = data.exchangeOrders || []),
+    api('/api/wishes').then(data => result.wishes = data.wishes || []),
+    api('/api/appeals').then(data => result.appeals = data.appeals || []),
   ];
   if (canOperate()) {
     reqs.push(api('/api/task-templates').then(data => result.taskTemplates = data.taskTemplates || []));
@@ -217,6 +219,8 @@ async function loadAll() {
   state.rewards = result.rewards || [];
   state.profile = result.profile || null;
   state.exchangeOrders = result.exchangeOrders || [];
+  state.wishes = result.wishes || [];
+  state.appeals = result.appeals || [];
   state.taskTemplates = result.taskTemplates || [];
   state.users = result.users || [];
   state.guardianGroups = result.guardianGroups || [];

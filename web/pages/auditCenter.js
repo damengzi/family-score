@@ -2,17 +2,20 @@ function renderAuditCenter() {
   if (!canOperate()) return '<div class="card"><h2>无权限</h2><div class="notice">只有家长或管理员可以查看待审核中心。</div></div>';
   const tasks = pendingAuditTasks();
   const orders = state.exchangeOrders.filter(o => o.status === 'PENDING');
+  const wishes = (state.wishes || []).filter(w => w.status === 'PENDING');
+  const appeals = (state.appeals || []).filter(a => a.status === 'PENDING');
+  const total = tasks.length + orders.length + wishes.length + appeals.length;
   return `<div class="stack">
     <div class="card overview-hero-card audit-hero">
-      <div><div class="eyebrow">审核工作台</div><h2>今天有 ${tasks.length + orders.length} 个事项等待确认</h2><p>把任务确认、兑换审核集中处理，减少在多个页面来回切换。</p></div>
+      <div><div class="eyebrow">审核工作台</div><h2>今天有 ${total} 个事项等待确认</h2><p>把任务确认、兑换审核、愿望审批和申诉处理集中起来。</p></div>
       <div class="overview-actions"><button data-tab="tasks" class="secondary">看今日任务</button><button data-tab="rewards" class="secondary">看奖励兑换</button></div>
     </div>
 
     <div class="mini-stat-grid">
       ${miniStat('待确认任务', tasks.length, '孩子已提交完成', '✅')}
       ${miniStat('待审核兑换', orders.length, '奖励申请待处理', '🎁')}
-      ${miniStat('涉及孩子', auditChildCount(tasks, orders), '需要关注的孩子', '👧')}
-      ${miniStat('今日总待办', tasks.length + orders.length, '集中确认事项', '📌')}
+      ${miniStat('待审批愿望', wishes.length, '孩子新期待', '🌟')}
+      ${miniStat('待处理申诉', appeals.length, '需要沟通确认', '📝')}
     </div>
 
     <div class="split">
@@ -32,7 +35,15 @@ function renderAuditCenter() {
         </div>`).join('')}</div>` : '<div class="empty-state"><div>🎁</div><b>暂无待审核兑换</b><p>孩子发起奖励申请后会集中出现在这里。</p></div>'}
       </div>
     </div>
+    <div class="split">
+      <div class="card"><div class="section-title"><div><h2>待审批愿望</h2><p class="small">孩子提交的新愿望，可以通过或暂不通过。</p></div><span class="tag">${wishes.length} 个</span></div>${wishes.length ? `<div class="task-card-list">${wishes.map(wishAuditCard).join('')}</div>` : '<div class="empty-state"><div>🌟</div><b>暂无待审批愿望</b><p>孩子提交愿望后会出现在这里。</p></div>'}</div>
+      <div class="card"><div class="section-title"><div><h2>待处理申诉</h2><p class="small">任务太难、无法完成或规则不清楚时，孩子可以发起申诉。</p></div><span class="tag">${appeals.length} 个</span></div>${appeals.length ? `<div class="task-card-list">${appeals.map(appealAuditCard).join('')}</div>` : '<div class="empty-state"><div>📝</div><b>暂无待处理申诉</b><p>孩子发起申诉后会出现在这里。</p></div>'}</div>
+    </div>
   </div>`;
+}
+
+function appealAuditCard(a) {
+  return `<div class="task-card pending"><div class="task-main"><div class="task-icon">📝</div><div><b>${h(a.targetType || 'TASK')} 申诉</b><div class="small">${h(auditChildName(a.childId))} · ${h(a.createdAt || '')}</div><p class="small">原因：${h(a.appealReason)}${a.expectedSolution ? `<br>希望：${h(a.expectedSolution)}` : ''}</p></div></div><div class="task-side"><button data-handle-appeal="${a.id}">同意处理</button><button class="secondary" data-reject-appeal="${a.id}">驳回申诉</button></div></div>`;
 }
 
 function pendingAuditTasks() {

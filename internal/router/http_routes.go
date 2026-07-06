@@ -174,6 +174,18 @@ func dispatchAPI(ctrl *controller.Controller, c *gin.Context) {
 		ctrl.CreateReward(w, r, sess)
 	case len(parts) == 2 && parts[0] == "rewards" && r.Method == http.MethodDelete:
 		ctrl.DeleteReward(w, r, sess, parseID(parts[1]))
+	case path == "wishes" && r.Method == http.MethodGet:
+		ctrl.Wishes(w, r, sess)
+	case path == "wishes" && r.Method == http.MethodPost:
+		ctrl.CreateWish(w, r, sess)
+	case len(parts) == 3 && parts[0] == "wishes" && parts[2] == "audit" && r.Method == http.MethodPost:
+		ctrl.AuditWish(w, r, sess, parseID(parts[1]))
+	case path == "appeals" && r.Method == http.MethodGet:
+		ctrl.Appeals(w, r, sess)
+	case path == "appeals" && r.Method == http.MethodPost:
+		ctrl.CreateAppeal(w, r, sess)
+	case len(parts) == 3 && parts[0] == "appeals" && parts[2] == "handle" && r.Method == http.MethodPost:
+		ctrl.HandleAppeal(w, r, sess, parseID(parts[1]))
 	case path == "exchange-orders" && r.Method == http.MethodGet:
 		ctrl.ExchangeOrders(w, r, sess)
 	case path == "exchange-orders" && r.Method == http.MethodPost:

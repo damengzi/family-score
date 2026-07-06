@@ -65,41 +65,6 @@ func (s *Service) SystemStatus(ctx context.Context) (SystemStatusParam, error) {
 	return SystemStatusParam{SetupCompleted: userCount > 0, DataDir: s.repo.DataDir, DBPath: s.repo.DBPath, Addr: "127.0.0.1:8080", Now: time.Now().Format(time.RFC3339)}, nil
 }
 
-// SetupInit 执行首次初始化，只创建家庭和固定管理员账号，不初始化其他账号或孩子档案。
-func (s *Service) SetupInit(ctx context.Context, _ SetupInitParam) error {
-	logger.L().Info("开始首次初始化", zap.String("admin_login", consts.DefaultAdminLoginName))
-	var count int
-	if err := s.repo.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM users`).Scan(&count); err != nil {
-		return err
-	}
-	if count > 0 {
-		return errors.New("系统已初始化")
-	}
-	hash, err := bcrypt.GenerateFromPassword([]byte(consts.DefaultAdminPassword), bcrypt.DefaultCost)
-	if err != nil {
-		return err
-	}
-	tx, err := s.repo.DB.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-	res, err := tx.ExecContext(ctx, `INSERT INTO families(name) VALUES(?)`, "我的家庭")
-	if err != nil {
-		return err
-	}
-	familyID, _ := res.LastInsertId()
-	if _, err := tx.ExecContext(ctx, `INSERT INTO users(family_id, child_id, display_name, role, login_name, password_hash, enabled) VALUES(?, NULL, '管理员', 'ADMIN', ?, ?, 1)`, familyID, consts.DefaultAdminLoginName, string(hash)); err != nil {
-		return err
-	}
-	if err := tx.Commit(); err != nil {
-		logger.L().Error("首次初始化事务提交失败", zap.Error(err), zap.Int64("family_id", familyID))
-		return err
-	}
-	logger.L().Info("首次初始化完成", zap.Int64("family_id", familyID), zap.String("admin_login", consts.DefaultAdminLoginName))
-	return nil
-}
-
 // SelfRegister 自主注册普通用户。
 func (s *Service) SelfRegister(ctx context.Context, req SelfRegisterParam) (int64, error) {
 	req.DisplayName = strings.TrimSpace(req.DisplayName)
@@ -351,7 +316,16 @@ func (s *Service) CreateScoreRecord(ctx context.Context, sess protocol.Session, 
 	if !s.CanAccessChild(ctx, sess, req.ChildID) {
 		return protocol.Account{}, errors.New("无权访问该孩子档案")
 	}
-	return s.ApplyScoreChange(ctx, protocol.ApplyScoreChangeParam{ChildID: req.ChildID, RecordType: req.RecordType, TargetAccount: req.TargetAccount, ItemName: req.ItemName, ScoreChange: req.ScoreChange, Reason: req.Reason, Evidence: req.Evidence, Operator: sess})
+	account, err := s.ApplyScoreChange(ctx, protocol.ApplyScoreChangeParam{ChildID: req.ChildID, RecordType: req.RecordType, TargetAccount: req.TargetAccount, ItemName: req.ItemName, ScoreChange: req.ScoreChange, Reason: req.Reason, Evidence: req.Evidence, Operator: sess})
+	if err != nil {
+		return protocol.Account{}, err
+	}
+	if strings.ToUpper(strings.TrimSpace(req.RecordType)) == "DEDUCT" {
+		if err := s.createRepairTaskForDeduct(ctx, req); err != nil {
+			logger.L().Warn("扣分后生成修复任务失败", zap.Error(err), zap.Int64("child_id", req.ChildID))
+		}
+	}
+	return account, nil
 }
 
 // TodayTasks 查询今日任务。

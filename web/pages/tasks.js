@@ -19,11 +19,11 @@ function renderTasks() {
 }
 
 function taskActions(t) {
-  if (t.status === 'TODO') return `<button class="secondary" data-submit-task="${t.id}">我完成啦</button>`;
+  if (t.status === 'TODO') return `<button class="secondary" data-submit-task="${t.id}">我完成啦</button> <button class="secondary" data-appeal-task="${t.id}">任务申诉</button>`;
   if (t.status === 'SUBMITTED' && canOperate()) return `<button data-audit-task="${t.id}">确认完成</button> <button class="secondary" data-reject-task="${t.id}">再试一次</button>`;
   if (t.status === 'SUBMITTED') return '<span class="small">等待家长确认</span>';
   if (t.status === 'APPROVED') return '<span class="small">已点亮</span>';
-  if (t.status === 'REJECTED') return '<span class="small">可以重新努力</span>';
+  if (t.status === 'REJECTED') return `<span class="small">可以重新努力</span> <button class="secondary" data-appeal-task="${t.id}">我要申诉</button>`;
   return '<span class="small">已处理</span>';
 }
 

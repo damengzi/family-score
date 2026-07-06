@@ -424,6 +424,80 @@ func (c *Controller) DeleteReward(w http.ResponseWriter, r *http.Request, sess p
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
+// Wishes 查询愿望列表。
+func (c *Controller) Wishes(w http.ResponseWriter, r *http.Request, sess protocol.Session) {
+	items, err := c.svc.Wishes(r.Context(), sess)
+	if err != nil {
+		errorJSON(w, http.StatusForbidden, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"wishes": items})
+}
+
+// CreateWish 创建愿望。
+func (c *Controller) CreateWish(w http.ResponseWriter, r *http.Request, sess protocol.Session) {
+	var req protocol.CreateWishParam
+	if !readJSON(w, r, &req) {
+		return
+	}
+	id, err := c.svc.CreateWish(r.Context(), sess, req)
+	if err != nil {
+		errorJSON(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"id": id})
+}
+
+// AuditWish 审批愿望。
+func (c *Controller) AuditWish(w http.ResponseWriter, r *http.Request, sess protocol.Session, id int64) {
+	var req protocol.AuditWishParam
+	if !readJSON(w, r, &req) {
+		return
+	}
+	if err := c.svc.AuditWish(r.Context(), sess, id, req); err != nil {
+		errorJSON(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+// Appeals 查询申诉列表。
+func (c *Controller) Appeals(w http.ResponseWriter, r *http.Request, sess protocol.Session) {
+	items, err := c.svc.Appeals(r.Context(), sess)
+	if err != nil {
+		errorJSON(w, http.StatusForbidden, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"appeals": items})
+}
+
+// CreateAppeal 创建申诉。
+func (c *Controller) CreateAppeal(w http.ResponseWriter, r *http.Request, sess protocol.Session) {
+	var req protocol.CreateAppealParam
+	if !readJSON(w, r, &req) {
+		return
+	}
+	id, err := c.svc.CreateAppeal(r.Context(), sess, req)
+	if err != nil {
+		errorJSON(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"id": id})
+}
+
+// HandleAppeal 处理申诉。
+func (c *Controller) HandleAppeal(w http.ResponseWriter, r *http.Request, sess protocol.Session, id int64) {
+	var req protocol.HandleAppealParam
+	if !readJSON(w, r, &req) {
+		return
+	}
+	if err := c.svc.HandleAppeal(r.Context(), sess, id, req); err != nil {
+		errorJSON(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
 // CreateExchangeOrder 创建兑换申请。
 func (c *Controller) CreateExchangeOrder(w http.ResponseWriter, r *http.Request, sess protocol.Session) {
 	var req service.CreateExchangeOrderParam

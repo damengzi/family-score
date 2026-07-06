@@ -1,19 +1,33 @@
 function renderSetup() {
   document.body.dataset.role = 'guest';
-  app.innerHTML = `<div class="login"><div class="card">
+  app.innerHTML = `<div class="login"><div class="card setup-card">
     <h1>初始化家庭德育积分系统</h1>
-    <p class="small">数据将保存在本机：${h(state.status.dataDir)}。初始化只创建数据库结构和固定管理员账号，不会预置家长、孩子或其他账号。</p>
+    <p class="small">数据将保存在本机：${h(state.status.dataDir)}。可一次性创建家庭组、常见家长账号、小明和小红。</p>
     <div id="setupError" class="small" style="color:#e05260;margin-bottom:10px"></div>
     <form class="form" id="setupForm">
-      <div class="notice">点击后创建管理员账号；家长、孩子和任务奖励可登录后再配置。</div>
+      <div class="form two"><div class="field"><label>家庭名称</label><input name="familyName" value="我的家庭" required></div><div class="field"><label>家庭组名称</label><input name="groupName" value="小明小红家" required></div></div>
+      <div class="field"><label>管理员密码</label><input name="adminPassword" type="password" value="654321" minlength="4" required><div class="small">管理员登录名仍为 admin；登录页不会展示账号和密码。</div></div>
+      <div class="notice">默认会创建爸爸、妈妈、爷爷、奶奶、姥姥、姥爷，以及小明、小红两个孩子账号。初始化后可在用户管理和家庭组中继续调整。</div>
+      <label class="row small"><input type="checkbox" name="withDefaults" checked> 创建默认家庭成员、孩子账号、任务和奖励</label>
       <button>完成初始化</button>
     </form>
   </div></div>`;
   document.getElementById('setupForm').onsubmit = async (e) => {
     e.preventDefault();
     setError('setupError', '');
+    const form = Object.fromEntries(new FormData(e.target));
+    const withDefaults = Boolean(form.withDefaults);
+    const groupName = form.groupName || '默认家庭组';
+    const body = {familyName: form.familyName, adminPassword: form.adminPassword, groupName, importDefaults: true, parents: [], children: []};
+    if (withDefaults) {
+      body.parents = ['爸爸','妈妈','爷爷','奶奶','姥姥','姥爷'].map((title, i) => ({displayName:title, loginName:['baba','mama','yeye','nainai','laolao','laoye'][i], password:'123456', parentTitle:title}));
+      body.children = [
+        {name:'小明', age:8, gender:'BOY', childLoginName:'xiaoming', childPassword:'123456'},
+        {name:'小红', age:8, gender:'GIRL', childLoginName:'xiaohong', childPassword:'123456'},
+      ];
+    }
     try {
-      await api('/api/setup/init', { method: 'POST', body: {} });
+      await api('/api/setup/init', { method: 'POST', body });
       toast('初始化完成，请登录');
       await boot();
     } catch (err) { setError('setupError', err.message); toast(err.message); }

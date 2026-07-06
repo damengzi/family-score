@@ -1,5 +1,7 @@
 function renderRewards() {
   const pending = state.exchangeOrders.filter(o => o.status === 'PENDING');
+  const wishes = (state.wishes || []).filter(w => !state.childId || Number(w.childId) === Number(state.childId));
+  const pendingWishes = (state.wishes || []).filter(w => w.status === 'PENDING');
   const rewardCards = state.rewards.map(r => `<div class="reward-card">
     <div class="reward-emoji">${rewardIcon(r.rewardType)}</div>
     <h3>${h(r.rewardName)} ${isWishlisted(state.childId, r.id) ? '<span class="wish-badge">想要</span>' : ''}</h3>
@@ -7,8 +9,25 @@ function renderRewards() {
     <div class="row"><span class="tag">${h(rewardTypeName(r.rewardType))}</span><span class="tag">${h(rewardCostText(r))}</span><span class="tag ${r.healthRisk==='NONE'?'green':r.healthRisk==='HIGH'?'red':'yellow'}">${h(riskName(r.healthRisk))}</span></div>
     <div class="row"><button data-reward="${r.id}">申请这个奖励</button><button class="secondary" data-wishlist="${r.id}">${isWishlisted(state.childId, r.id) ? '移出愿望单' : '加入愿望单'}</button></div>
   </div>`).join('');
-  const auditPanel = canOperate() ? `<div class="card"><div class="section-title"><div><h2>待审核兑换</h2><p class="small">确认前可以看看孩子当前分值和奖励健康风险。</p></div><span class="tag">${pending.length} 个待处理</span></div>${pending.length ? `<div class="task-card-list">${pending.map(o => `<div class="task-card pending"><div class="task-main"><div class="task-icon">🎁</div><div><b>${h(o.rewardName)}</b><div class="small">${h(o.appliedAt)} · ${o.costScore}分 / ${o.costStar}星</div></div></div><div class="task-side"><button data-audit-order="${o.id}">确认兑换</button><button class="secondary" data-reject-order="${o.id}">暂不兑换</button></div></div>`).join('')}</div>` : '<div class="empty-state"><div>🎁</div><b>暂无待审核兑换</b><p>孩子还在积攒兑换能量。</p></div>'}</div>` : '';
-  return `<div class="stack"><div class="card"><div class="section-title"><div><h2>奖励商店</h2><p class="small">零食、图书、活动和特权，都可以成为努力后的期待。</p></div><span class="tag">${state.rewards.length} 个奖励</span></div><div class="notice">建议优先配置“图书、亲子活动、运动体验、家庭特权”等低风险奖励；零食饮品适合低频、限量、明确规则。</div><br>${state.rewards.length ? `<div class="reward-shelf">${rewardCards}</div>` : '<div class="empty-state"><div>🎁</div><b>奖励货架还是空的</b><p>可以先配置一个小奖励，比如科普书、亲子活动或小零食。</p></div>'}</div><div class="card"><div class="section-title"><div><h2>我的愿望单</h2><p class="small">先收藏想要的奖励，再通过任务一点点靠近它。</p></div><span class="tag">${wishlistCount(state.childId)} 个愿望</span></div>${renderWishlistPanel(state.childId)}</div>${rewardPrinciples()}${auditPanel}</div>`;
+  const auditPanel = canOperate() ? `<div class="card"><div class="section-title"><div><h2>待审核兑换 / 愿望</h2><p class="small">集中确认兑换申请和孩子新愿望。</p></div><span class="tag">${pending.length + pendingWishes.length} 个待处理</span></div>${pending.length ? `<h3>兑换申请</h3><div class="task-card-list">${pending.map(o => `<div class="task-card pending"><div class="task-main"><div class="task-icon">🎁</div><div><b>${h(o.rewardName)}</b><div class="small">${h(auditChildName(o.childId))} · ${h(o.appliedAt)} · ${o.costScore}分 / ${o.costStar}星</div></div></div><div class="task-side"><button data-audit-order="${o.id}">确认兑换</button><button class="secondary" data-reject-order="${o.id}">暂不兑换</button></div></div>`).join('')}</div>` : ''}${pendingWishes.length ? `<h3>愿望审批</h3><div class="task-card-list">${pendingWishes.map(w => wishAuditCard(w)).join('')}</div>` : ''}${!pending.length && !pendingWishes.length ? '<div class="empty-state"><div>🎁</div><b>暂无待处理事项</b><p>孩子还在积攒兑换能量。</p></div>' : ''}</div>` : '';
+  return `<div class="stack"><div class="card"><div class="section-title"><div><h2>奖励商店</h2><p class="small">零食、图书、活动和特权，都可以成为努力后的期待。</p></div><span class="tag">${state.rewards.length} 个奖励</span></div><div class="notice">建议优先配置“图书、亲子活动、运动体验、家庭特权”等低风险奖励；零食饮品适合低频、限量、明确规则。</div><br>${state.rewards.length ? `<div class="reward-shelf">${rewardCards}</div>` : '<div class="empty-state"><div>🎁</div><b>奖励货架还是空的</b><p>可以先配置一个小奖励，比如科普书、亲子活动或小零食。</p></div>'}</div><div class="card"><div class="section-title"><div><h2>我的愿望</h2><p class="small">孩子可以提交新愿望，家长审批后再决定是否纳入家庭奖励。</p></div><span class="tag">${wishes.length} 个愿望</span></div>${wishFormHTML()}${wishes.length ? `<div class="task-card-list">${wishes.map(wishCard).join('')}</div>` : '<div class="empty-state"><div>🌟</div><b>还没有提交愿望</b><p>写下一个想要努力达成的小目标吧。</p></div>'}</div>${rewardPrinciples()}${auditPanel}</div>`;
+}
+
+function wishFormHTML() {
+  if (!state.childId) return '<div class="notice">请先选择一个孩子，再提交愿望。</div>';
+  return `<form class="form" id="wishForm"><div class="form two"><div class="field"><label>愿望名称</label><input name="wishName" placeholder="如：去科技馆 / 科普书一本" required></div><div class="field"><label>愿望类型</label><select name="wishType"><option value="ACTIVITY">活动</option><option value="BOOK">图书</option><option value="TOY">玩具</option><option value="SNACK">零食</option><option value="PRIVILEGE">特权</option></select></div></div><div class="form two"><div class="field"><label>建议兑换分</label><input name="expectedScore" type="number" min="0" value="10"></div><div class="field"><label>建议星星</label><input name="expectedStar" type="number" min="0" value="0"></div></div><div class="field"><label>为什么想要这个愿望</label><textarea name="reason" placeholder="写下你的理由，家长会看到。"></textarea></div><button>提交愿望给家长审批</button></form><br>`;
+}
+
+function wishCard(w) {
+  return `<div class="task-card ${w.status === 'PENDING' ? 'pending' : w.status === 'APPROVED' ? 'done' : 'rejected'}"><div class="task-main"><div class="task-icon">🌟</div><div><b>${h(w.wishName)}</b><div class="small">${h(auditChildName(w.childId))} · ${h(w.wishType)} · ${w.expectedScore}分 / ${w.expectedStar}星 · ${wishStatusText(w.status)}</div><p class="small">${h(w.reason || '暂无理由')}${w.auditNote ? `<br>家长意见：${h(w.auditNote)}` : ''}</p></div></div></div>`;
+}
+
+function wishAuditCard(w) {
+  return `<div class="task-card pending"><div class="task-main"><div class="task-icon">🌟</div><div><b>${h(w.wishName)}</b><div class="small">${h(auditChildName(w.childId))} · ${h(w.wishType)} · ${w.expectedScore}分 / ${w.expectedStar}星</div><p class="small">${h(w.reason || '暂无理由')}</p></div></div><div class="task-side"><button data-audit-wish="${w.id}">通过愿望</button><button class="secondary" data-reject-wish="${w.id}">暂不通过</button></div></div>`;
+}
+
+function wishStatusText(status) {
+  return ({PENDING:'待审批',APPROVED:'已通过',REJECTED:'已驳回'}[status] || status || '待审批');
 }
 
 function rewardCostText(r) {

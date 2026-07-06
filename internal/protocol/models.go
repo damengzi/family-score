@@ -144,6 +144,37 @@ type Dashboard struct {
 	Tasks   []TaskInstance `json:"tasks"`
 }
 
+// Wish 表示孩子提交的奖励愿望。
+type Wish struct {
+	ID            int64  `json:"id"`
+	ChildID       int64  `json:"childId"`
+	WishName      string `json:"wishName"`
+	WishType      string `json:"wishType"`
+	ExpectedScore int    `json:"expectedScore"`
+	ExpectedStar  int    `json:"expectedStar"`
+	Reason        string `json:"reason"`
+	Status        string `json:"status"`
+	AuditNote     string `json:"auditNote"`
+	CreatedAt     string `json:"createdAt"`
+	AuditedAt     string `json:"auditedAt"`
+}
+
+// Appeal 表示孩子对任务或积分记录的申诉。
+type Appeal struct {
+	ID               int64  `json:"id"`
+	ChildID          int64  `json:"childId"`
+	TargetType       string `json:"targetType"`
+	TargetID         int64  `json:"targetId"`
+	RecordID         int64  `json:"recordId"`
+	AppealReason     string `json:"appealReason"`
+	ExpectedSolution string `json:"expectedSolution"`
+	Status           string `json:"status"`
+	HandleResult     string `json:"handleResult"`
+	HandleNote       string `json:"handleNote"`
+	CreatedAt        string `json:"createdAt"`
+	HandledAt        string `json:"handledAt"`
+}
+
 // GuardianGroup 表示监护组。
 type GuardianGroup struct {
 	ID          int64  `json:"id"`
@@ -183,8 +214,32 @@ type Profile struct {
 	SessionExpiresAt string `json:"sessionExpiresAt"`
 }
 
-// SetupInitParam 表示首次初始化参数。当前初始化不接收账号、密码或孩子信息。
-type SetupInitParam struct{}
+// SetupInitParam 表示首次初始化参数。
+type SetupInitParam struct {
+	FamilyName     string             `json:"familyName"`
+	AdminPassword  string             `json:"adminPassword"`
+	GroupName      string             `json:"groupName"`
+	ImportDefaults bool               `json:"importDefaults"`
+	Parents        []SetupParentParam `json:"parents"`
+	Children       []SetupChildParam  `json:"children"`
+}
+
+// SetupParentParam 表示初始化家长账号参数。
+type SetupParentParam struct {
+	DisplayName string `json:"displayName"`
+	LoginName   string `json:"loginName"`
+	Password    string `json:"password"`
+	ParentTitle string `json:"parentTitle"`
+}
+
+// SetupChildParam 表示初始化孩子档案和账号参数。
+type SetupChildParam struct {
+	Name           string `json:"name"`
+	Age            int    `json:"age"`
+	Gender         string `json:"gender"`
+	ChildLoginName string `json:"childLoginName"`
+	ChildPassword  string `json:"childPassword"`
+}
 
 // CreateGuardianGroupParam 表示新增监护组参数。
 type CreateGuardianGroupParam struct {
@@ -325,6 +380,38 @@ type CreateExchangeOrderParam struct {
 	ChildID  int64  `json:"childId"`
 	RewardID int64  `json:"rewardId"`
 	Note     string `json:"note"`
+}
+
+// CreateWishParam 表示新增愿望参数。
+type CreateWishParam struct {
+	ChildID       int64  `json:"childId"`
+	WishName      string `json:"wishName"`
+	WishType      string `json:"wishType"`
+	ExpectedScore int    `json:"expectedScore"`
+	ExpectedStar  int    `json:"expectedStar"`
+	Reason        string `json:"reason"`
+}
+
+// AuditWishParam 表示愿望审批参数。
+type AuditWishParam struct {
+	Result    string `json:"result"`
+	AuditNote string `json:"auditNote"`
+}
+
+// CreateAppealParam 表示新增申诉参数。
+type CreateAppealParam struct {
+	ChildID          int64  `json:"childId"`
+	TargetType       string `json:"targetType"`
+	TargetID         int64  `json:"targetId"`
+	RecordID         int64  `json:"recordId"`
+	AppealReason     string `json:"appealReason"`
+	ExpectedSolution string `json:"expectedSolution"`
+}
+
+// HandleAppealParam 表示处理申诉参数。
+type HandleAppealParam struct {
+	Result     string `json:"result"`
+	HandleNote string `json:"handleNote"`
 }
 
 // ApplyScoreChangeParam 表示一次账户分值变更所需参数。
