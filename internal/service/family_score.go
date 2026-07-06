@@ -5,8 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -363,25 +361,41 @@ func (s *Service) AuditTask(ctx context.Context, sess protocol.Session, taskID i
 		return protocol.Account{}, errors.New("只有管理员或家长可以执行该操作")
 	}
 	var t protocol.TaskInstance
-	err := s.repo.DB.QueryRowContext(ctx, `SELECT id, child_id, COALESCE(template_id, 0), task_name, task_type, category, COALESCE(subject, 'GENERAL'), COALESCE(content, ''), COALESCE(question_type, 'NONE'), COALESCE(answer, ''), score_value, target_account, status, submit_note, audit_note, task_date FROM task_instances WHERE id = ?`, taskID).Scan(&t.ID, &t.ChildID, &t.TemplateID, &t.TaskName, &t.TaskType, &t.Category, &t.Subject, &t.Content, &t.QuestionType, &t.Answer, &t.ScoreValue, &t.TargetAccount, &t.Status, &t.SubmitNote, &t.AuditNote, &t.TaskDate)
+	err := s.repo.DB.QueryRowContext(ctx, `SELECT id, child_id, COALESCE(template_id, 0), task_name, task_type, category, COALESCE(subject, 'GENERAL'), COALESCE(content, ''), COALESCE(question_type, 'NONE'), COALESCE(answer, ''), score_value, target_account, status, submit_note, audit_note, task_date, COALESCE(due_at, '') FROM task_instances WHERE id = ?`, taskID).Scan(&t.ID, &t.ChildID, &t.TemplateID, &t.TaskName, &t.TaskType, &t.Category, &t.Subject, &t.Content, &t.QuestionType, &t.Answer, &t.ScoreValue, &t.TargetAccount, &t.Status, &t.SubmitNote, &t.AuditNote, &t.TaskDate, &t.DueAt)
 	if err != nil {
 		return protocol.Account{}, errors.New("任务不存在")
 	}
 	if !s.CanAccessChild(ctx, sess, t.ChildID) {
 		return protocol.Account{}, errors.New("无权审核该任务")
 	}
-	if t.Status != "SUBMITTED" && t.Status != "TODO" {
-		return protocol.Account{}, errors.New("任务状态不可审核")
+	if t.Status != "SUBMITTED" {
+		return protocol.Account{}, errors.New("任务必须由孩子提交后才能审核")
 	}
-	if strings.ToUpper(req.Result) != "APPROVED" {
-		_, _ = s.repo.DB.ExecContext(ctx, `UPDATE task_instances SET status = 'REJECTED', audit_note = ?, audited_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, req.AuditNote, taskID)
+	result := strings.ToUpper(req.Result)
+	if result != "APPROVED" {
+		res, err := s.repo.DB.ExecContext(ctx, `UPDATE task_instances SET status = 'REJECTED', audit_note = ?, audited_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'SUBMITTED'`, req.AuditNote, taskID)
+		if err != nil {
+			return protocol.Account{}, err
+		}
+		if n, _ := res.RowsAffected(); n == 0 {
+			return protocol.Account{}, errors.New("任务已被其他家长处理，请刷新")
+		}
 		return protocol.Account{}, nil
 	}
+	res, err := s.repo.DB.ExecContext(ctx, `UPDATE task_instances SET status = 'APPROVING', audit_note = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'SUBMITTED'`, req.AuditNote, taskID)
+	if err != nil {
+		return protocol.Account{}, err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return protocol.Account{}, errors.New("任务已被其他家长处理，请刷新")
+	}
 	var approvedScore int
-	if err := s.repo.DB.QueryRowContext(ctx, `SELECT COALESCE(SUM(score_value), 0) FROM task_instances WHERE child_id = ? AND task_date = (SELECT task_date FROM task_instances WHERE id = ?) AND status = 'APPROVED'`, t.ChildID, taskID).Scan(&approvedScore); err != nil {
+	if err := s.repo.DB.QueryRowContext(ctx, `SELECT COALESCE(SUM(score_value), 0) FROM task_instances WHERE child_id = ? AND task_date = ? AND status = 'APPROVED'`, t.ChildID, t.TaskDate).Scan(&approvedScore); err != nil {
+		_, _ = s.repo.DB.ExecContext(ctx, `UPDATE task_instances SET status = 'SUBMITTED', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'APPROVING'`, taskID)
 		return protocol.Account{}, err
 	}
 	if approvedScore+t.ScoreValue > consts.DailyTaskScoreLimit {
+		_, _ = s.repo.DB.ExecContext(ctx, `UPDATE task_instances SET status = 'SUBMITTED', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'APPROVING'`, taskID)
 		return protocol.Account{}, errors.New("当天任务加分不能超过 15 分")
 	}
 	recordType := "ADD"
@@ -396,9 +410,16 @@ func (s *Service) AuditTask(ctx context.Context, sess protocol.Session, taskID i
 	}
 	account, err := s.ApplyScoreChange(ctx, protocol.ApplyScoreChangeParam{ChildID: t.ChildID, RecordType: recordType, TargetAccount: target, ItemName: t.TaskName, ScoreChange: t.ScoreValue, Reason: "任务审核通过", Operator: sess})
 	if err != nil {
+		_, _ = s.repo.DB.ExecContext(ctx, `UPDATE task_instances SET status = 'SUBMITTED', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'APPROVING'`, taskID)
 		return protocol.Account{}, err
 	}
-	_, _ = s.repo.DB.ExecContext(ctx, `UPDATE task_instances SET status = 'APPROVED', audit_note = ?, audited_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, req.AuditNote, taskID)
+	res, err = s.repo.DB.ExecContext(ctx, `UPDATE task_instances SET status = 'APPROVED', audit_note = ?, audited_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'APPROVING'`, req.AuditNote, taskID)
+	if err != nil {
+		return protocol.Account{}, err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return protocol.Account{}, errors.New("任务状态异常，请刷新")
+	}
 	return account, nil
 }
 
@@ -407,7 +428,7 @@ func (s *Service) TaskTemplates(ctx context.Context, sess protocol.Session) ([]p
 	if !CanOperate(sess) {
 		return nil, errors.New("只有管理员或家长可以查看任务配置")
 	}
-	rows, err := s.repo.DB.QueryContext(ctx, `SELECT id, task_name, task_type, category, score_value, target_account, need_parent_confirm, daily_limit, weekly_limit, enabled, description FROM task_templates WHERE family_id = ? ORDER BY id DESC`, sess.FamilyID)
+	rows, err := s.repo.DB.QueryContext(ctx, `SELECT id, task_name, task_type, category, COALESCE(subject, 'GENERAL'), COALESCE(content, ''), COALESCE(question_type, 'NONE'), COALESCE(answer, ''), score_value, target_account, need_parent_confirm, daily_limit, weekly_limit, enabled, description, COALESCE(due_time, '') FROM task_templates WHERE family_id = ? ORDER BY id DESC`, sess.FamilyID)
 	if err != nil {
 		return nil, err
 	}
@@ -415,7 +436,7 @@ func (s *Service) TaskTemplates(ctx context.Context, sess protocol.Session) ([]p
 	items := []protocol.TaskTemplate{}
 	for rows.Next() {
 		var it protocol.TaskTemplate
-		if err := rows.Scan(&it.ID, &it.TaskName, &it.TaskType, &it.Category, &it.ScoreValue, &it.TargetAccount, &it.NeedParentConfirm, &it.DailyLimit, &it.WeeklyLimit, &it.Enabled, &it.Description); err == nil {
+		if err := rows.Scan(&it.ID, &it.TaskName, &it.TaskType, &it.Category, &it.Subject, &it.Content, &it.QuestionType, &it.Answer, &it.ScoreValue, &it.TargetAccount, &it.NeedParentConfirm, &it.DailyLimit, &it.WeeklyLimit, &it.Enabled, &it.Description, &it.DueTime); err == nil {
 			items = append(items, it)
 		}
 	}
@@ -436,6 +457,7 @@ func (s *Service) CreateTaskTemplate(ctx context.Context, sess protocol.Session,
 	req.Content = strings.TrimSpace(req.Content)
 	req.Answer = strings.TrimSpace(req.Answer)
 	req.Description = strings.TrimSpace(req.Description)
+	req.DueTime = normalizeDueTime(req.DueTime)
 	if req.TaskName == "" || req.ScoreValue <= 0 {
 		return 0, errors.New("任务名称和分值不能为空")
 	}
@@ -454,7 +476,7 @@ func (s *Service) CreateTaskTemplate(ctx context.Context, sess protocol.Session,
 	if req.TargetAccount == "" {
 		req.TargetAccount = "AUTO"
 	}
-	res, err := s.repo.DB.ExecContext(ctx, `INSERT INTO task_templates(family_id, task_name, task_type, category, subject, content, question_type, answer, score_value, target_account, description) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, sess.FamilyID, req.TaskName, req.TaskType, req.Category, req.Subject, req.Content, req.QuestionType, req.Answer, req.ScoreValue, req.TargetAccount, req.Description)
+	res, err := s.repo.DB.ExecContext(ctx, `INSERT INTO task_templates(family_id, task_name, task_type, category, subject, content, question_type, answer, score_value, target_account, description, due_time) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, sess.FamilyID, req.TaskName, req.TaskType, req.Category, req.Subject, req.Content, req.QuestionType, req.Answer, req.ScoreValue, req.TargetAccount, req.Description, req.DueTime)
 	if err != nil {
 		return 0, err
 	}
@@ -571,9 +593,14 @@ func (s *Service) CreateExchangeOrder(ctx context.Context, sess protocol.Session
 func (s *Service) ExchangeOrders(ctx context.Context, sess protocol.Session) ([]protocol.ExchangeOrder, error) {
 	query := `SELECT o.id, o.child_id, o.reward_id, r.reward_name, o.cost_score, o.cost_star, o.status, o.apply_note, o.audit_note, o.applied_at FROM exchange_orders o JOIN rewards r ON r.id = o.reward_id JOIN children c ON c.id = o.child_id WHERE c.family_id = ? ORDER BY o.id DESC LIMIT 100`
 	args := []any{sess.FamilyID}
-	if sess.Role == consts.RoleChild {
+	switch sess.Role {
+	case consts.RoleChild:
 		query = `SELECT o.id, o.child_id, o.reward_id, r.reward_name, o.cost_score, o.cost_star, o.status, o.apply_note, o.audit_note, o.applied_at FROM exchange_orders o JOIN rewards r ON r.id = o.reward_id JOIN children c ON c.id = o.child_id WHERE c.family_id = ? AND o.child_id = ? ORDER BY o.id DESC LIMIT 100`
 		args = append(args, sess.ChildID)
+	case consts.RoleParent:
+		parentGroup := s.parentGroupOf(ctx, sess.FamilyID, sess.UserID)
+		query = `SELECT o.id, o.child_id, o.reward_id, r.reward_name, o.cost_score, o.cost_star, o.status, o.apply_note, o.audit_note, o.applied_at FROM exchange_orders o JOIN rewards r ON r.id = o.reward_id JOIN children c ON c.id = o.child_id WHERE c.family_id = ? AND (c.parent_user_id = ? OR (? <> '' AND c.parent_group = ?)) ORDER BY o.id DESC LIMIT 100`
+		args = append(args, sess.UserID, parentGroup, parentGroup)
 	}
 	rows, err := s.repo.DB.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -603,56 +630,60 @@ func (s *Service) AuditExchangeOrder(ctx context.Context, sess protocol.Session,
 	if err != nil {
 		return protocol.Account{}, errors.New("兑换申请不存在")
 	}
+	if !s.CanAccessChild(ctx, sess, childID) {
+		return protocol.Account{}, errors.New("无权审核该兑换申请")
+	}
 	if status != "PENDING" {
 		return protocol.Account{}, errors.New("兑换申请状态不可审核")
 	}
 	if strings.ToUpper(req.Result) != "APPROVED" {
-		_, _ = s.repo.DB.ExecContext(ctx, `UPDATE exchange_orders SET status = 'REJECTED', audit_note = ?, audited_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, req.AuditNote, orderID)
+		_, _ = s.repo.DB.ExecContext(ctx, `UPDATE exchange_orders SET status = 'REJECTED', audit_note = ?, audited_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'PENDING'`, req.AuditNote, orderID)
 		return protocol.Account{}, nil
+	}
+	if err := s.validateExchangeApproval(ctx, sess.FamilyID, childID, rewardID, costScore, costStar); err != nil {
+		return protocol.Account{}, err
 	}
 	return s.applyExchange(ctx, childID, orderID, rewardID, costScore, costStar, sess, req.AuditNote)
 }
 
-// Backup 创建本地 SQLite 备份。
-func (s *Service) Backup(ctx context.Context, sess protocol.Session) (string, int64, error) {
-	logger.L().Info("开始创建本地备份", zap.Int64("operator_id", sess.UserID))
-	if !CanOperate(sess) {
-		return "", 0, errors.New("只有管理员或家长可以执行该操作")
+func (s *Service) validateExchangeApproval(ctx context.Context, familyID, childID, rewardID int64, costScore, costStar int) error {
+	var rw protocol.Reward
+	err := s.repo.DB.QueryRowContext(ctx, `SELECT id, reward_name, reward_type, cost_score, cost_star, weekly_limit, monthly_limit, health_risk, need_parent_confirm, enabled, description FROM rewards WHERE id = ? AND family_id = ?`, rewardID, familyID).Scan(&rw.ID, &rw.RewardName, &rw.RewardType, &rw.CostScore, &rw.CostStar, &rw.WeeklyLimit, &rw.MonthlyLimit, &rw.HealthRisk, &rw.NeedParentConfirm, &rw.Enabled, &rw.Description)
+	if err != nil || !rw.Enabled || rw.HealthRisk == "HIGH" {
+		return errors.New("兑换项不可用")
 	}
-	name := fmt.Sprintf("family-score-%s.db", time.Now().Format("20060102-150405"))
-	backupPath := filepath.Join(s.repo.DataDir, "backups", name)
-	if _, err := s.repo.DB.ExecContext(ctx, `VACUUM INTO `+utils.SQLiteQuote(backupPath)); err != nil {
-		s.recordBackup(ctx, "BACKUP", backupPath, 0, "FAILED", sess.UserID, err.Error())
-		return "", 0, err
-	}
-	info, _ := os.Stat(backupPath)
-	size := int64(0)
-	if info != nil {
-		size = info.Size()
-	}
-	s.recordBackup(ctx, "BACKUP", backupPath, size, "DONE", sess.UserID, "手动备份")
-	logger.L().Info("本地备份创建完成", zap.String("backup_path", backupPath), zap.Int64("file_size", size), zap.Int64("operator_id", sess.UserID))
-	return backupPath, size, nil
-}
-
-// Backups 查询本地备份记录。
-func (s *Service) Backups(ctx context.Context, sess protocol.Session) ([]protocol.BackupRecord, error) {
-	if !IsAdmin(sess) {
-		return nil, errors.New("只有管理员可以查看备份记录")
-	}
-	rows, err := s.repo.DB.QueryContext(ctx, `SELECT id, operation_type, file_path, file_size, status, remark, created_at FROM backup_records ORDER BY id DESC LIMIT 50`)
+	account, err := s.ensureAccount(ctx, childID)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	defer rows.Close()
-	items := []protocol.BackupRecord{}
-	for rows.Next() {
-		var it protocol.BackupRecord
-		if err := rows.Scan(&it.ID, &it.OperationType, &it.FilePath, &it.FileSize, &it.Status, &it.Remark, &it.CreatedAt); err == nil {
-			items = append(items, it)
+	if account.BaseScore < 80 {
+		return errors.New("基准分低于 80，暂停全部兑换")
+	}
+	if account.BaseScore < 90 && costScore >= 15 {
+		return errors.New("基准分低于 90，暂停高价值兑换")
+	}
+	if account.BonusScore < costScore || account.StarCount < costStar {
+		return errors.New("可兑换积分或星星不足")
+	}
+	if rw.WeeklyLimit > 0 {
+		var weekCount int
+		if err := s.repo.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM exchange_orders WHERE child_id = ? AND reward_id = ? AND status = 'APPROVED' AND completed_at >= DATETIME('now', 'localtime', '-7 days')`, childID, rewardID).Scan(&weekCount); err != nil {
+			return err
+		}
+		if weekCount >= rw.WeeklyLimit {
+			return errors.New("该奖励本周兑换次数已达上限")
 		}
 	}
-	return items, nil
+	if rw.MonthlyLimit > 0 {
+		var monthCount int
+		if err := s.repo.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM exchange_orders WHERE child_id = ? AND reward_id = ? AND status = 'APPROVED' AND STRFTIME('%Y-%m', completed_at) = STRFTIME('%Y-%m', 'now', 'localtime')`, childID, rewardID).Scan(&monthCount); err != nil {
+			return err
+		}
+		if monthCount >= rw.MonthlyLimit {
+			return errors.New("该奖励本月兑换次数已达上限")
+		}
+	}
+	return nil
 }
 
 // ApplyScoreChange 执行账户分值变更并写入流水。
@@ -846,7 +877,7 @@ func (s *Service) listTodayTasks(ctx context.Context, sess protocol.Session, chi
 	if err := s.ensureTodayTasks(ctx, sess.FamilyID, childID); err != nil {
 		return nil, err
 	}
-	rows, err := s.repo.DB.QueryContext(ctx, `SELECT id, child_id, COALESCE(template_id, 0), task_name, task_type, category, COALESCE(subject, 'GENERAL'), COALESCE(content, ''), COALESCE(question_type, 'NONE'), COALESCE(answer, ''), score_value, target_account, status, submit_note, audit_note, task_date FROM task_instances WHERE child_id = ? AND task_date = DATE('now', 'localtime') ORDER BY id`, childID)
+	rows, err := s.repo.DB.QueryContext(ctx, `SELECT id, child_id, COALESCE(template_id, 0), task_name, task_type, category, COALESCE(subject, 'GENERAL'), COALESCE(content, ''), COALESCE(question_type, 'NONE'), COALESCE(answer, ''), score_value, target_account, status, submit_note, audit_note, task_date, COALESCE(due_at, '') FROM task_instances WHERE child_id = ? AND task_date = DATE('now', 'localtime') ORDER BY CASE WHEN due_at IS NULL OR due_at = '' THEN 1 ELSE 0 END, due_at, id`, childID)
 	if err != nil {
 		return nil, err
 	}
@@ -854,7 +885,7 @@ func (s *Service) listTodayTasks(ctx context.Context, sess protocol.Session, chi
 	items := []protocol.TaskInstance{}
 	for rows.Next() {
 		var t protocol.TaskInstance
-		if err := rows.Scan(&t.ID, &t.ChildID, &t.TemplateID, &t.TaskName, &t.TaskType, &t.Category, &t.Subject, &t.Content, &t.QuestionType, &t.Answer, &t.ScoreValue, &t.TargetAccount, &t.Status, &t.SubmitNote, &t.AuditNote, &t.TaskDate); err == nil {
+		if err := rows.Scan(&t.ID, &t.ChildID, &t.TemplateID, &t.TaskName, &t.TaskType, &t.Category, &t.Subject, &t.Content, &t.QuestionType, &t.Answer, &t.ScoreValue, &t.TargetAccount, &t.Status, &t.SubmitNote, &t.AuditNote, &t.TaskDate, &t.DueAt); err == nil {
 			items = append(items, t)
 		}
 	}
@@ -862,22 +893,22 @@ func (s *Service) listTodayTasks(ctx context.Context, sess protocol.Session, chi
 }
 
 func (s *Service) ensureTodayTasks(ctx context.Context, familyID, childID int64) error {
-	rows, err := s.repo.DB.QueryContext(ctx, `SELECT id, task_name, task_type, category, COALESCE(subject, 'GENERAL'), COALESCE(content, ''), COALESCE(question_type, 'NONE'), COALESCE(answer, ''), score_value, target_account FROM task_templates WHERE family_id = ? AND task_type IN ('DAILY', 'TEAM') AND enabled = 1`, familyID)
+	rows, err := s.repo.DB.QueryContext(ctx, `SELECT id, task_name, task_type, category, COALESCE(subject, 'GENERAL'), COALESCE(content, ''), COALESCE(question_type, 'NONE'), COALESCE(answer, ''), score_value, target_account, COALESCE(due_time, '') FROM task_templates WHERE family_id = ? AND task_type IN ('DAILY', 'TEAM') AND enabled = 1`, familyID)
 	if err != nil {
 		return err
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var templateID int64
-		var name, typ, cat, subject, content, questionType, answer, target string
+		var name, typ, cat, subject, content, questionType, answer, target, dueTime string
 		var score int
-		if err := rows.Scan(&templateID, &name, &typ, &cat, &subject, &content, &questionType, &answer, &score, &target); err != nil {
+		if err := rows.Scan(&templateID, &name, &typ, &cat, &subject, &content, &questionType, &answer, &score, &target, &dueTime); err != nil {
 			continue
 		}
 		var exists int
 		_ = s.repo.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM task_instances WHERE child_id = ? AND template_id = ? AND task_date = DATE('now', 'localtime')`, childID, templateID).Scan(&exists)
 		if exists == 0 {
-			_, err = s.repo.DB.ExecContext(ctx, `INSERT INTO task_instances(child_id, template_id, task_name, task_type, category, subject, content, question_type, answer, score_value, target_account, task_date) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, DATE('now', 'localtime'))`, childID, templateID, name, typ, cat, subject, content, questionType, answer, score, target)
+			_, err = s.repo.DB.ExecContext(ctx, `INSERT INTO task_instances(child_id, template_id, task_name, task_type, category, subject, content, question_type, answer, score_value, target_account, task_date, due_at) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, DATE('now', 'localtime'), CASE WHEN ? <> '' THEN DATETIME(DATE('now', 'localtime') || ' ' || ?) ELSE NULL END)`, childID, templateID, name, typ, cat, subject, content, questionType, answer, score, target, dueTime, dueTime)
 			if err != nil {
 				return err
 			}

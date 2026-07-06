@@ -358,6 +358,20 @@ func (c *Controller) AuditTask(w http.ResponseWriter, r *http.Request, sess prot
 	writeJSON(w, http.StatusOK, map[string]any{"account": account})
 }
 
+// PublishTask 发布一次性任务。
+func (c *Controller) PublishTask(w http.ResponseWriter, r *http.Request, sess protocol.Session) {
+	var req protocol.PublishTaskParam
+	if !readJSON(w, r, &req) {
+		return
+	}
+	id, err := c.svc.PublishTask(r.Context(), sess, req)
+	if err != nil {
+		errorJSON(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"id": id})
+}
+
 // TaskTemplates 查询任务模板列表。
 func (c *Controller) TaskTemplates(w http.ResponseWriter, r *http.Request, sess protocol.Session) {
 	items, err := c.svc.TaskTemplates(r.Context(), sess)

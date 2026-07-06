@@ -1,5 +1,5 @@
 function renderTasks() {
-  const tasks = state.dashboard?.tasks || [];
+  const tasks = sortTasksByDue(state.dashboard?.tasks || []);
   return `<div class="stack"><div class="card">
     <div class="section-title">
       <div>
@@ -8,14 +8,75 @@ function renderTasks() {
       </div>
       <span class="tag">共 ${tasks.length} 个</span>
     </div>
-    ${tasks.length ? `<div class="task-card-list">${tasks.map(t => `<div class="task-card ${taskTone(t.status)}">
+    ${dueSoonBanner(tasks)}${tasks.length ? `<div class="task-card-list">${tasks.map(t => `<div class="task-card ${taskTone(t.status)}" id="task-${t.id}" data-task-id="${t.id}">
       <div class="task-main">
         <div class="task-icon">${taskIcon(t.category)}</div>
-        <div><b>${h(t.taskName)}</b><div class="small">${h(taskCategoryName(t.category))} · ${h(taskSubjectName(t.subject))} · ${h(taskQuestionTypeName(t.questionType))} · +${h(t.scoreValue)} 分</div>${taskContentHTML(t)}</div>
+        <div><b>${h(t.taskName)}</b><div class="small">${h(taskCategoryName(t.category))} · ${h(taskSubjectName(t.subject))} · ${h(taskQuestionTypeName(t.questionType))} · +${h(t.scoreValue)} 分${taskDueLabel(t)}</div>${taskContentHTML(t)}</div>
       </div>
       <div class="task-side"><span class="tag">${h(taskStatusText(t.status))}</span><div>${taskActions(t)}</div></div>
     </div>`).join('')}</div>` : '<div class="empty-state"><div>🧩</div><b>今天还没有任务</b><p>可以去任务自定义中添加一些适合今天的小目标。</p></div>'}
   </div><div class="card"><div class="section-title"><div><h2>今日实践建议</h2><p class="small">不知道做什么时，可以从这些低门槛任务开始。</p></div><span class="tag">家庭可用</span></div>${dailyPracticeIdeas()}</div></div>`;
+}
+
+function parseTaskDue(t) {
+  if (!t?.dueAt) return null;
+  const value = String(t.dueAt).replace(' ', 'T');
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function sortTasksByDue(tasks) {
+  return [...(tasks || [])].sort((a, b) => {
+    const da = parseTaskDue(a);
+    const db = parseTaskDue(b);
+    if (da && db) return da - db || Number(a.id) - Number(b.id);
+    if (da) return -1;
+    if (db) return 1;
+    return Number(a.id) - Number(b.id);
+  });
+}
+
+function dueSoonTasks(tasks = state.dashboard?.tasks || []) {
+  const now = Date.now();
+  const limit = now + 15 * 60 * 1000;
+  return sortTasksByDue(tasks).filter(t => t.status === 'TODO' && parseTaskDue(t) && parseTaskDue(t).getTime() >= now && parseTaskDue(t).getTime() <= limit);
+}
+
+function taskDueLabel(t) {
+  const due = parseTaskDue(t);
+  if (!due) return '';
+  const mins = Math.ceil((due.getTime() - Date.now()) / 60000);
+  const time = due.toLocaleTimeString('zh-CN', {hour:'2-digit', minute:'2-digit', hour12:false});
+  if (t.status === 'TODO' && mins >= 0 && mins <= 15) return ` · <span class="deadline-hot">${mins}分钟后截止</span>`;
+  return ` · 截止 ${time}`;
+}
+
+function dueSoonBanner(tasks) {
+  const items = dueSoonTasks(tasks);
+  if (!items.length) return '';
+  return `<div class="deadline-marquee"><div>${items.map(t => `⏰ ${h(t.taskName)} ${taskDueLabel(t).replace(/<[^>]+>/g, '')}`).join('　　')}</div></div>`;
+}
+
+function showTaskDeadlineReminder() {
+  if (state.me?.role !== 'CHILD') return;
+  const task = dueSoonTasks()[0];
+  if (!task) return;
+  const key = `fs_deadline_popup:${task.id}:${task.dueAt}`;
+  if (sessionStorage.getItem(key)) return;
+  sessionStorage.setItem(key, '1');
+  const due = parseTaskDue(task);
+  const mins = Math.max(0, Math.ceil((due.getTime() - Date.now()) / 60000));
+  const overlay = document.createElement('div');
+  overlay.className = 'deadline-modal';
+  overlay.innerHTML = `<div class="deadline-dialog"><h2>任务快到截止时间啦</h2><p><b>${h(task.taskName)}</b> 将在 ${mins} 分钟内截止。</p><div class="row"><button data-open-task>去完成任务</button><button class="secondary" data-close-task-reminder>稍后提醒</button></div></div>`;
+  document.body.appendChild(overlay);
+  overlay.querySelector('[data-close-task-reminder]').onclick = () => overlay.remove();
+  overlay.querySelector('[data-open-task]').onclick = () => {
+    overlay.remove();
+    state.tab = 'tasks';
+    renderApp();
+    setTimeout(() => document.getElementById(`task-${task.id}`)?.scrollIntoView({behavior:'smooth', block:'center'}), 60);
+  };
 }
 
 function taskActions(t) {
@@ -53,7 +114,17 @@ function taskTone(status) {
 }
 
 function renderTaskConfig() {
-  return `<div class="split">
+  const childOptions = state.children.map(c => `<option value="${c.id}" ${c.id === state.childId ? 'selected' : ''}>${h(c.name)} ${c.age}岁</option>`).join('');
+  return `<div class="stack"><div class="card"><div class="section-title"><div><h2>发布一次性任务</h2><p class="small">给某个孩子单独发布今天或指定日期的临时任务、修复任务。</p></div><span class="tag">精准发布</span></div><form class="form" id="publishTaskForm">
+      <div class="form two"><div class="field"><label>孩子</label><select name="childId">${childOptions}</select></div><div class="field"><label>任务日期</label><input name="taskDate" type="date"></div></div><div class="field"><label>截止时间</label><input name="dueTime" type="time"><div class="small">到截止前 15 分钟，孩子登录后会收到弹窗和滚动提醒。</div></div>
+      <div class="field"><label>任务名称</label><input name="taskName" placeholder="如：数学口算 20 题 / 道歉和补救" required></div>
+      <div class="form two"><div class="field"><label>任务类型</label><select name="taskType"><option value="TEMP">临时</option><option value="REPAIR">惩罚/修复</option><option value="DAILY">每日</option><option value="TEAM">家庭小队</option></select></div><div class="field"><label>分类</label><select name="category"><option value="ACTION">行动类</option><option value="MATH">数学题类</option><option value="READING">阅读类</option><option value="EMOTION">情绪</option><option value="HOUSEWORK">家务</option><option value="HEALTH">健康</option></select></div></div>
+      <div class="form two"><div class="field"><label>科目</label><select name="subject">${taskSubjectOptionsHTML('GENERAL')}</select></div><div class="field"><label>题型</label><select name="questionType"><option value="NONE">无题目</option><option value="READING_TEXT">阅读内容</option><option value="CHOICE">选择题</option><option value="FILL">填空题</option><option value="CALCULATION">计算题</option><option value="SHORT_ANSWER">简答题</option></select></div></div>
+      <div class="field"><label>内容 / 题目</label><textarea name="content"></textarea></div>
+      <div class="field"><label>参考答案</label><input name="answer"></div>
+      <div class="form two"><div class="field"><label>分值</label><input name="scoreValue" type="number" min="1" value="1"></div><div class="field"><label>目标账户</label><select name="targetAccount"><option value="AUTO">自动</option><option value="BASE">基准分</option><option value="TEAM">小队分</option></select></div></div>
+      <button>发布任务</button>
+    </form></div><div class="split">
     <div class="card"><h2>任务自定义添加</h2><form class="form" id="taskTemplateForm">
       <div class="field"><label>任务名称</label><input name="taskName" placeholder="如：阅读课文 / 数学口算 10 题" required></div>
       <div class="form two"><div class="field"><label>任务类型</label><select name="taskType"><option value="DAILY">每日</option><option value="REPAIR">惩罚/修复</option><option value="TEAM">家庭小队</option><option value="TEMP">临时</option></select></div><div class="field"><label>任务分类</label><select name="category"><option value="ACTION">行动类</option><option value="READING">阅读类</option><option value="MATH">数学题类</option><option value="STUDY">综合学习</option><option value="SELF_CARE">自理</option><option value="HOUSEWORK">家务</option><option value="EMOTION">情绪</option><option value="HEALTH">健康</option><option value="SAFETY">安全</option></select></div></div>
@@ -61,10 +132,10 @@ function renderTaskConfig() {
       <div class="field"><label>阅读内容 / 题目</label><textarea name="content" placeholder="阅读类可填写要阅读的段落；数学题可填写选择题、填空题或计算题题目。"></textarea></div>
       <div class="field"><label>参考答案</label><input name="answer" placeholder="选填，如：B / 42 / 自主表述"></div>
       <div class="form two"><div class="field"><label>分值</label><input name="scoreValue" type="number" min="1" value="1"></div><div class="field"><label>目标账户</label><select name="targetAccount"><option value="AUTO">自动</option><option value="BASE">基准分</option><option value="TEAM">小队分</option></select></div></div>
-      <div class="field"><label>说明</label><textarea name="description"></textarea></div><button>新增任务模板</button>
+      <div class="form two"><div class="field"><label>默认截止时间</label><input name="dueTime" type="time"><div class="small">每日任务生成后会按这个时间截止。</div></div><div class="field"><label>说明</label><textarea name="description"></textarea></div></div><button>新增任务模板</button>
     </form><div class="preset-block"><h3>任务建议库</h3><p class="small">点击后填入上方表单，适合作为家庭常用任务模板。</p>${taskPresetGrid()}</div></div>
-    <div class="card"><h2>任务模板</h2>${state.taskTemplates.length ? `<table class="table"><tbody>${state.taskTemplates.map(t => `<tr><td><b>${h(t.taskName)}</b><div class="small">${h(t.taskType)} · ${h(taskCategoryName(t.category))} · ${h(taskSubjectName(t.subject))} · ${h(taskQuestionTypeName(t.questionType))} · +${h(t.scoreValue)} · ${h(t.description)}</div>${taskContentHTML(t)}</td><td><button class="danger" data-del-task-template="${t.id}">删除</button></td></tr>`).join('')}</tbody></table>` : '<div class="empty-state"><div>🧩</div><b>暂无模板</b><p>添加一些每日可坚持的小任务。</p></div>'}</div>
-  </div>`;
+    <div class="card"><h2>任务模板</h2>${state.taskTemplates.length ? `<table class="table"><tbody>${state.taskTemplates.map(t => `<tr><td><b>${h(t.taskName)}</b><div class="small">${h(t.taskType)} · ${h(taskCategoryName(t.category))} · ${h(taskSubjectName(t.subject))} · ${h(taskQuestionTypeName(t.questionType))} · +${h(t.scoreValue)}${t.dueTime ? ` · 截止 ${h(t.dueTime)}` : ''} · ${h(t.description)}</div>${taskContentHTML(t)}</td><td><button class="danger" data-del-task-template="${t.id}">删除</button></td></tr>`).join('')}</tbody></table>` : '<div class="empty-state"><div>🧩</div><b>暂无模板</b><p>添加一些每日可坚持的小任务。</p></div>'}</div>
+  </div></div>`;
 }
 
 function taskSubjectOptionsHTML(selected) {

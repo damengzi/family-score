@@ -162,6 +162,8 @@ func dispatchAPI(ctrl *controller.Controller, c *gin.Context) {
 		ctrl.SubmitTask(w, r, sess, parseID(parts[1]))
 	case len(parts) == 3 && parts[0] == "tasks" && parts[2] == "audit" && r.Method == http.MethodPost:
 		ctrl.AuditTask(w, r, sess, parseID(parts[1]))
+	case path == "tasks/publish" && r.Method == http.MethodPost:
+		ctrl.PublishTask(w, r, sess)
 	case path == "task-templates" && r.Method == http.MethodGet:
 		ctrl.TaskTemplates(w, r, sess)
 	case path == "task-templates" && r.Method == http.MethodPost:

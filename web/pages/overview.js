@@ -185,7 +185,7 @@ function overviewRewards(rewards) {
       <span class="tag">${h(rewardCostText(r))}</span>
       <span class="tag ${r.healthRisk === 'NONE' ? 'green' : 'yellow'}">${h(riskName(r.healthRisk))}</span>
     </div>
-    <div class="row"><button data-reward="${r.id}">申请兑换</button><button class="secondary" data-wishlist="${r.id}">${isWishlisted(state.childId, r.id) ? '移出愿望' : '加入愿望'}</button></div>
+    <div class="row"><button data-reward="${r.id}">申请兑换</button><button class="secondary" data-wishlist="${r.id}">${isWishlisted(state.childId, r.id) ? '已提交愿望' : '提交愿望'}</button></div>
   </div>`).join('')}</div>`;
 }
 

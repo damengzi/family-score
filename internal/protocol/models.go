@@ -87,6 +87,7 @@ type TaskInstance struct {
 	SubmitNote    string `json:"submitNote"`
 	AuditNote     string `json:"auditNote"`
 	TaskDate      string `json:"taskDate"`
+	DueAt         string `json:"dueAt"`
 }
 
 // TaskTemplate 表示可配置任务模板。
@@ -106,6 +107,7 @@ type TaskTemplate struct {
 	WeeklyLimit       int    `json:"weeklyLimit"`
 	Enabled           bool   `json:"enabled"`
 	Description       string `json:"description"`
+	DueTime           string `json:"dueTime"`
 }
 
 // Reward 表示可兑换奖励配置。
@@ -361,6 +363,24 @@ type CreateTaskTemplateParam struct {
 	ScoreValue    int    `json:"scoreValue"`
 	TargetAccount string `json:"targetAccount"`
 	Description   string `json:"description"`
+	DueTime       string `json:"dueTime"`
+}
+
+// PublishTaskParam 表示发布一次性任务参数。
+type PublishTaskParam struct {
+	ChildID       int64  `json:"childId"`
+	TaskName      string `json:"taskName"`
+	TaskType      string `json:"taskType"`
+	Category      string `json:"category"`
+	Subject       string `json:"subject"`
+	Content       string `json:"content"`
+	QuestionType  string `json:"questionType"`
+	Answer        string `json:"answer"`
+	ScoreValue    int    `json:"scoreValue"`
+	TargetAccount string `json:"targetAccount"`
+	TaskDate      string `json:"taskDate"`
+	DueAt         string `json:"dueAt"`
+	DueTime       string `json:"dueTime"`
 }
 
 // CreateRewardParam 表示新增奖励参数。
