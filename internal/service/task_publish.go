@@ -25,6 +25,8 @@ func (s *Service) PublishTask(ctx context.Context, sess protocol.Session, req pr
 	req.TargetAccount = strings.ToUpper(strings.TrimSpace(req.TargetAccount))
 	req.Content = strings.TrimSpace(req.Content)
 	req.Answer = strings.TrimSpace(req.Answer)
+	req.Questions = normalizeTaskQuestions(req.Questions, req.Subject, req.QuestionType, req.Content, req.Answer)
+	questionsJSON := encodeTaskQuestions(req.Questions)
 	req.TaskDate = strings.TrimSpace(req.TaskDate)
 	req.DueAt = strings.ReplaceAll(strings.TrimSpace(req.DueAt), "T", " ")
 	req.DueTime = normalizeDueTime(req.DueTime)
@@ -56,8 +58,8 @@ func (s *Service) PublishTask(ctx context.Context, sess protocol.Session, req pr
 	} else if req.DueTime != "" {
 		dueAt = taskDate + " " + req.DueTime
 	}
-	args := []any{req.ChildID, req.TaskName, req.TaskType, req.Category, req.Subject, req.Content, req.QuestionType, req.Answer, req.ScoreValue, req.TargetAccount, taskDate, dueAt}
-	res, err := s.repo.DB.ExecContext(ctx, `INSERT INTO task_instances(child_id, template_id, task_name, task_type, category, subject, content, question_type, answer, score_value, target_account, task_date, due_at) VALUES(?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, args...)
+	args := []any{req.ChildID, req.TaskName, req.TaskType, req.Category, req.Subject, req.Content, req.QuestionType, req.Answer, questionsJSON, req.ScoreValue, req.TargetAccount, taskDate, dueAt}
+	res, err := s.repo.DB.ExecContext(ctx, `INSERT INTO task_instances(child_id, template_id, task_name, task_type, category, subject, content, question_type, answer, questions, score_value, target_account, task_date, due_at) VALUES(?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, args...)
 	if err != nil {
 		return 0, err
 	}

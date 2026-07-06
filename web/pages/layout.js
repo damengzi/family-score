@@ -104,6 +104,8 @@ function bindEvents() {
   document.querySelectorAll('[data-score-type]').forEach(b => b.onclick = () => fillScorePreset(b));
   document.querySelectorAll('[data-task-name]').forEach(b => b.onclick = () => fillTaskPreset(b));
   document.querySelectorAll('[data-reward-name]').forEach(b => b.onclick = () => fillRewardPreset(b));
+  document.querySelectorAll('[data-add-question-row]').forEach(b => b.onclick = () => addQuestionRow(b.dataset.addQuestionRow));
+  if (typeof bindQuestionRowEvents === 'function') bindQuestionRowEvents();
   const profilePrefsForm = document.getElementById('profilePrefsForm');
   if (profilePrefsForm) profilePrefsForm.onsubmit = (e) => { e.preventDefault(); const body = Object.fromEntries(new FormData(e.target)); savePrefs({theme: body.theme || 'system', language: body.language || 'zh'}); toast(tr('toastPrefsSaved','偏好已保存')); renderApp(); };
   const profilePasswordForm = document.getElementById('profilePasswordForm');
@@ -126,9 +128,9 @@ function bindEvents() {
   document.querySelectorAll('[data-add-child-group]').forEach(b => b.onclick = async () => { try { await setChildFamilyGroup(Number(b.dataset.addChildGroup), b.dataset.groupName || ''); toast('已添加孩子成员'); await loadHome(); } catch(err) { toast(err.message); } });
   document.querySelectorAll('[data-remove-child-group]').forEach(b => b.onclick = async () => { try { await setChildFamilyGroup(Number(b.dataset.removeChildGroup), ''); toast('已移出孩子成员'); await loadHome(); } catch(err) { toast(err.message); } });
   const publishTaskForm = document.getElementById('publishTaskForm');
-  if (publishTaskForm) publishTaskForm.onsubmit = async (e) => { e.preventDefault(); const body = Object.fromEntries(new FormData(e.target)); body.childId = Number(body.childId || state.childId || 0); body.scoreValue = Number(body.scoreValue || 1); try { await api('/api/tasks/publish', {method:'POST', body}); toast('任务已发布'); await loadAll(); } catch(err) { toast(err.message); } };
+  if (publishTaskForm) publishTaskForm.onsubmit = async (e) => { e.preventDefault(); const body = Object.fromEntries(new FormData(e.target)); body.childId = Number(body.childId || state.childId || 0); body.scoreValue = Number(body.scoreValue || 1); applyTaskQuestionsToBody(e.target, body); try { await api('/api/tasks/publish', {method:'POST', body}); toast('任务已发布'); await loadAll(); } catch(err) { toast(err.message); } };
   const taskTemplateForm = document.getElementById('taskTemplateForm');
-  if (taskTemplateForm) taskTemplateForm.onsubmit = async (e) => { e.preventDefault(); const body = Object.fromEntries(new FormData(e.target)); body.scoreValue = Number(body.scoreValue); try { await api('/api/task-templates', {method:'POST', body}); toast(tr('toastTaskTemplateAdded','任务模板已新增')); await loadAll(); } catch(err) { toast(err.message); } };
+  if (taskTemplateForm) taskTemplateForm.onsubmit = async (e) => { e.preventDefault(); const body = Object.fromEntries(new FormData(e.target)); body.scoreValue = Number(body.scoreValue); applyTaskQuestionsToBody(e.target, body); try { await api('/api/task-templates', {method:'POST', body}); toast(tr('toastTaskTemplateAdded','任务模板已新增')); await loadAll(); } catch(err) { toast(err.message); } };
   const rewardForm = document.getElementById('rewardForm');
   if (rewardForm) rewardForm.onsubmit = async (e) => { e.preventDefault(); const body = Object.fromEntries(new FormData(e.target)); ['costScore','costStar','weeklyLimit','monthlyLimit'].forEach(k => body[k] = Number(body[k])); try { await api('/api/rewards', {method:'POST', body}); toast(tr('toastRewardAdded','奖励已新增')); await loadAll(); } catch(err) { toast(err.message); } };
   const wishForm = document.getElementById('wishForm');

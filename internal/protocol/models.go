@@ -69,45 +69,55 @@ type ScoreRecord struct {
 	OccurredAt    string `json:"occurredAt"`
 }
 
+// TaskQuestion 表示任务中的一道学科题目。
+type TaskQuestion struct {
+	Subject      string `json:"subject"`
+	QuestionType string `json:"questionType"`
+	Content      string `json:"content"`
+	Answer       string `json:"answer"`
+}
+
 // TaskInstance 表示某一天生成给孩子的任务实例。
 type TaskInstance struct {
-	ID            int64  `json:"id"`
-	ChildID       int64  `json:"childId"`
-	TemplateID    int64  `json:"templateId"`
-	TaskName      string `json:"taskName"`
-	TaskType      string `json:"taskType"`
-	Category      string `json:"category"`
-	Subject       string `json:"subject"`
-	Content       string `json:"content"`
-	QuestionType  string `json:"questionType"`
-	Answer        string `json:"answer"`
-	ScoreValue    int    `json:"scoreValue"`
-	TargetAccount string `json:"targetAccount"`
-	Status        string `json:"status"`
-	SubmitNote    string `json:"submitNote"`
-	AuditNote     string `json:"auditNote"`
-	TaskDate      string `json:"taskDate"`
-	DueAt         string `json:"dueAt"`
+	ID            int64          `json:"id"`
+	ChildID       int64          `json:"childId"`
+	TemplateID    int64          `json:"templateId"`
+	TaskName      string         `json:"taskName"`
+	TaskType      string         `json:"taskType"`
+	Category      string         `json:"category"`
+	Subject       string         `json:"subject"`
+	Content       string         `json:"content"`
+	QuestionType  string         `json:"questionType"`
+	Answer        string         `json:"answer"`
+	Questions     []TaskQuestion `json:"questions"`
+	ScoreValue    int            `json:"scoreValue"`
+	TargetAccount string         `json:"targetAccount"`
+	Status        string         `json:"status"`
+	SubmitNote    string         `json:"submitNote"`
+	AuditNote     string         `json:"auditNote"`
+	TaskDate      string         `json:"taskDate"`
+	DueAt         string         `json:"dueAt"`
 }
 
 // TaskTemplate 表示可配置任务模板。
 type TaskTemplate struct {
-	ID                int64  `json:"id"`
-	TaskName          string `json:"taskName"`
-	TaskType          string `json:"taskType"`
-	Category          string `json:"category"`
-	Subject           string `json:"subject"`
-	Content           string `json:"content"`
-	QuestionType      string `json:"questionType"`
-	Answer            string `json:"answer"`
-	ScoreValue        int    `json:"scoreValue"`
-	TargetAccount     string `json:"targetAccount"`
-	NeedParentConfirm bool   `json:"needParentConfirm"`
-	DailyLimit        int    `json:"dailyLimit"`
-	WeeklyLimit       int    `json:"weeklyLimit"`
-	Enabled           bool   `json:"enabled"`
-	Description       string `json:"description"`
-	DueTime           string `json:"dueTime"`
+	ID                int64          `json:"id"`
+	TaskName          string         `json:"taskName"`
+	TaskType          string         `json:"taskType"`
+	Category          string         `json:"category"`
+	Subject           string         `json:"subject"`
+	Content           string         `json:"content"`
+	QuestionType      string         `json:"questionType"`
+	Answer            string         `json:"answer"`
+	Questions         []TaskQuestion `json:"questions"`
+	ScoreValue        int            `json:"scoreValue"`
+	TargetAccount     string         `json:"targetAccount"`
+	NeedParentConfirm bool           `json:"needParentConfirm"`
+	DailyLimit        int            `json:"dailyLimit"`
+	WeeklyLimit       int            `json:"weeklyLimit"`
+	Enabled           bool           `json:"enabled"`
+	Description       string         `json:"description"`
+	DueTime           string         `json:"dueTime"`
 }
 
 // Reward 表示可兑换奖励配置。
@@ -353,34 +363,36 @@ type AuditParam struct {
 
 // CreateTaskTemplateParam 表示新增任务模板参数。
 type CreateTaskTemplateParam struct {
-	TaskName      string `json:"taskName"`
-	TaskType      string `json:"taskType"`
-	Category      string `json:"category"`
-	Subject       string `json:"subject"`
-	Content       string `json:"content"`
-	QuestionType  string `json:"questionType"`
-	Answer        string `json:"answer"`
-	ScoreValue    int    `json:"scoreValue"`
-	TargetAccount string `json:"targetAccount"`
-	Description   string `json:"description"`
-	DueTime       string `json:"dueTime"`
+	TaskName      string         `json:"taskName"`
+	TaskType      string         `json:"taskType"`
+	Category      string         `json:"category"`
+	Subject       string         `json:"subject"`
+	Content       string         `json:"content"`
+	QuestionType  string         `json:"questionType"`
+	Answer        string         `json:"answer"`
+	Questions     []TaskQuestion `json:"questions"`
+	ScoreValue    int            `json:"scoreValue"`
+	TargetAccount string         `json:"targetAccount"`
+	Description   string         `json:"description"`
+	DueTime       string         `json:"dueTime"`
 }
 
 // PublishTaskParam 表示发布一次性任务参数。
 type PublishTaskParam struct {
-	ChildID       int64  `json:"childId"`
-	TaskName      string `json:"taskName"`
-	TaskType      string `json:"taskType"`
-	Category      string `json:"category"`
-	Subject       string `json:"subject"`
-	Content       string `json:"content"`
-	QuestionType  string `json:"questionType"`
-	Answer        string `json:"answer"`
-	ScoreValue    int    `json:"scoreValue"`
-	TargetAccount string `json:"targetAccount"`
-	TaskDate      string `json:"taskDate"`
-	DueAt         string `json:"dueAt"`
-	DueTime       string `json:"dueTime"`
+	ChildID       int64          `json:"childId"`
+	TaskName      string         `json:"taskName"`
+	TaskType      string         `json:"taskType"`
+	Category      string         `json:"category"`
+	Subject       string         `json:"subject"`
+	Content       string         `json:"content"`
+	QuestionType  string         `json:"questionType"`
+	Answer        string         `json:"answer"`
+	Questions     []TaskQuestion `json:"questions"`
+	ScoreValue    int            `json:"scoreValue"`
+	TargetAccount string         `json:"targetAccount"`
+	TaskDate      string         `json:"taskDate"`
+	DueAt         string         `json:"dueAt"`
+	DueTime       string         `json:"dueTime"`
 }
 
 // CreateRewardParam 表示新增奖励参数。

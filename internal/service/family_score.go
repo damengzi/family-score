@@ -361,10 +361,12 @@ func (s *Service) AuditTask(ctx context.Context, sess protocol.Session, taskID i
 		return protocol.Account{}, errors.New("只有管理员或家长可以执行该操作")
 	}
 	var t protocol.TaskInstance
-	err := s.repo.DB.QueryRowContext(ctx, `SELECT id, child_id, COALESCE(template_id, 0), task_name, task_type, category, COALESCE(subject, 'GENERAL'), COALESCE(content, ''), COALESCE(question_type, 'NONE'), COALESCE(answer, ''), score_value, target_account, status, submit_note, audit_note, task_date, COALESCE(due_at, '') FROM task_instances WHERE id = ?`, taskID).Scan(&t.ID, &t.ChildID, &t.TemplateID, &t.TaskName, &t.TaskType, &t.Category, &t.Subject, &t.Content, &t.QuestionType, &t.Answer, &t.ScoreValue, &t.TargetAccount, &t.Status, &t.SubmitNote, &t.AuditNote, &t.TaskDate, &t.DueAt)
+	var questionsRaw string
+	err := s.repo.DB.QueryRowContext(ctx, `SELECT id, child_id, COALESCE(template_id, 0), task_name, task_type, category, COALESCE(subject, 'GENERAL'), COALESCE(content, ''), COALESCE(question_type, 'NONE'), COALESCE(answer, ''), COALESCE(questions, '[]'), score_value, target_account, status, submit_note, audit_note, task_date, COALESCE(due_at, '') FROM task_instances WHERE id = ?`, taskID).Scan(&t.ID, &t.ChildID, &t.TemplateID, &t.TaskName, &t.TaskType, &t.Category, &t.Subject, &t.Content, &t.QuestionType, &t.Answer, &questionsRaw, &t.ScoreValue, &t.TargetAccount, &t.Status, &t.SubmitNote, &t.AuditNote, &t.TaskDate, &t.DueAt)
 	if err != nil {
 		return protocol.Account{}, errors.New("任务不存在")
 	}
+	t.Questions = decodeTaskQuestions(questionsRaw, t.Subject, t.QuestionType, t.Content, t.Answer)
 	if !s.CanAccessChild(ctx, sess, t.ChildID) {
 		return protocol.Account{}, errors.New("无权审核该任务")
 	}
@@ -428,7 +430,7 @@ func (s *Service) TaskTemplates(ctx context.Context, sess protocol.Session) ([]p
 	if !CanOperate(sess) {
 		return nil, errors.New("只有管理员或家长可以查看任务配置")
 	}
-	rows, err := s.repo.DB.QueryContext(ctx, `SELECT id, task_name, task_type, category, COALESCE(subject, 'GENERAL'), COALESCE(content, ''), COALESCE(question_type, 'NONE'), COALESCE(answer, ''), score_value, target_account, need_parent_confirm, daily_limit, weekly_limit, enabled, description, COALESCE(due_time, '') FROM task_templates WHERE family_id = ? ORDER BY id DESC`, sess.FamilyID)
+	rows, err := s.repo.DB.QueryContext(ctx, `SELECT id, task_name, task_type, category, COALESCE(subject, 'GENERAL'), COALESCE(content, ''), COALESCE(question_type, 'NONE'), COALESCE(answer, ''), COALESCE(questions, '[]'), score_value, target_account, need_parent_confirm, daily_limit, weekly_limit, enabled, description, COALESCE(due_time, '') FROM task_templates WHERE family_id = ? ORDER BY id DESC`, sess.FamilyID)
 	if err != nil {
 		return nil, err
 	}
@@ -436,7 +438,9 @@ func (s *Service) TaskTemplates(ctx context.Context, sess protocol.Session) ([]p
 	items := []protocol.TaskTemplate{}
 	for rows.Next() {
 		var it protocol.TaskTemplate
-		if err := rows.Scan(&it.ID, &it.TaskName, &it.TaskType, &it.Category, &it.Subject, &it.Content, &it.QuestionType, &it.Answer, &it.ScoreValue, &it.TargetAccount, &it.NeedParentConfirm, &it.DailyLimit, &it.WeeklyLimit, &it.Enabled, &it.Description, &it.DueTime); err == nil {
+		var questionsRaw string
+		if err := rows.Scan(&it.ID, &it.TaskName, &it.TaskType, &it.Category, &it.Subject, &it.Content, &it.QuestionType, &it.Answer, &questionsRaw, &it.ScoreValue, &it.TargetAccount, &it.NeedParentConfirm, &it.DailyLimit, &it.WeeklyLimit, &it.Enabled, &it.Description, &it.DueTime); err == nil {
+			it.Questions = decodeTaskQuestions(questionsRaw, it.Subject, it.QuestionType, it.Content, it.Answer)
 			items = append(items, it)
 		}
 	}
@@ -456,6 +460,8 @@ func (s *Service) CreateTaskTemplate(ctx context.Context, sess protocol.Session,
 	req.TargetAccount = strings.ToUpper(strings.TrimSpace(req.TargetAccount))
 	req.Content = strings.TrimSpace(req.Content)
 	req.Answer = strings.TrimSpace(req.Answer)
+	req.Questions = normalizeTaskQuestions(req.Questions, req.Subject, req.QuestionType, req.Content, req.Answer)
+	questionsJSON := encodeTaskQuestions(req.Questions)
 	req.Description = strings.TrimSpace(req.Description)
 	req.DueTime = normalizeDueTime(req.DueTime)
 	if req.TaskName == "" || req.ScoreValue <= 0 {
@@ -476,7 +482,7 @@ func (s *Service) CreateTaskTemplate(ctx context.Context, sess protocol.Session,
 	if req.TargetAccount == "" {
 		req.TargetAccount = "AUTO"
 	}
-	res, err := s.repo.DB.ExecContext(ctx, `INSERT INTO task_templates(family_id, task_name, task_type, category, subject, content, question_type, answer, score_value, target_account, description, due_time) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, sess.FamilyID, req.TaskName, req.TaskType, req.Category, req.Subject, req.Content, req.QuestionType, req.Answer, req.ScoreValue, req.TargetAccount, req.Description, req.DueTime)
+	res, err := s.repo.DB.ExecContext(ctx, `INSERT INTO task_templates(family_id, task_name, task_type, category, subject, content, question_type, answer, questions, score_value, target_account, description, due_time) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, sess.FamilyID, req.TaskName, req.TaskType, req.Category, req.Subject, req.Content, req.QuestionType, req.Answer, questionsJSON, req.ScoreValue, req.TargetAccount, req.Description, req.DueTime)
 	if err != nil {
 		return 0, err
 	}
@@ -877,7 +883,7 @@ func (s *Service) listTodayTasks(ctx context.Context, sess protocol.Session, chi
 	if err := s.ensureTodayTasks(ctx, sess.FamilyID, childID); err != nil {
 		return nil, err
 	}
-	rows, err := s.repo.DB.QueryContext(ctx, `SELECT id, child_id, COALESCE(template_id, 0), task_name, task_type, category, COALESCE(subject, 'GENERAL'), COALESCE(content, ''), COALESCE(question_type, 'NONE'), COALESCE(answer, ''), score_value, target_account, status, submit_note, audit_note, task_date, COALESCE(due_at, '') FROM task_instances WHERE child_id = ? AND task_date = DATE('now', 'localtime') ORDER BY CASE WHEN due_at IS NULL OR due_at = '' THEN 1 ELSE 0 END, due_at, id`, childID)
+	rows, err := s.repo.DB.QueryContext(ctx, `SELECT id, child_id, COALESCE(template_id, 0), task_name, task_type, category, COALESCE(subject, 'GENERAL'), COALESCE(content, ''), COALESCE(question_type, 'NONE'), COALESCE(answer, ''), COALESCE(questions, '[]'), score_value, target_account, status, submit_note, audit_note, task_date, COALESCE(due_at, '') FROM task_instances WHERE child_id = ? AND task_date = DATE('now', 'localtime') ORDER BY CASE WHEN due_at IS NULL OR due_at = '' THEN 1 ELSE 0 END, due_at, id`, childID)
 	if err != nil {
 		return nil, err
 	}
@@ -885,7 +891,9 @@ func (s *Service) listTodayTasks(ctx context.Context, sess protocol.Session, chi
 	items := []protocol.TaskInstance{}
 	for rows.Next() {
 		var t protocol.TaskInstance
-		if err := rows.Scan(&t.ID, &t.ChildID, &t.TemplateID, &t.TaskName, &t.TaskType, &t.Category, &t.Subject, &t.Content, &t.QuestionType, &t.Answer, &t.ScoreValue, &t.TargetAccount, &t.Status, &t.SubmitNote, &t.AuditNote, &t.TaskDate, &t.DueAt); err == nil {
+		var questionsRaw string
+		if err := rows.Scan(&t.ID, &t.ChildID, &t.TemplateID, &t.TaskName, &t.TaskType, &t.Category, &t.Subject, &t.Content, &t.QuestionType, &t.Answer, &questionsRaw, &t.ScoreValue, &t.TargetAccount, &t.Status, &t.SubmitNote, &t.AuditNote, &t.TaskDate, &t.DueAt); err == nil {
+			t.Questions = decodeTaskQuestions(questionsRaw, t.Subject, t.QuestionType, t.Content, t.Answer)
 			items = append(items, t)
 		}
 	}
@@ -893,22 +901,22 @@ func (s *Service) listTodayTasks(ctx context.Context, sess protocol.Session, chi
 }
 
 func (s *Service) ensureTodayTasks(ctx context.Context, familyID, childID int64) error {
-	rows, err := s.repo.DB.QueryContext(ctx, `SELECT id, task_name, task_type, category, COALESCE(subject, 'GENERAL'), COALESCE(content, ''), COALESCE(question_type, 'NONE'), COALESCE(answer, ''), score_value, target_account, COALESCE(due_time, '') FROM task_templates WHERE family_id = ? AND task_type IN ('DAILY', 'TEAM') AND enabled = 1`, familyID)
+	rows, err := s.repo.DB.QueryContext(ctx, `SELECT id, task_name, task_type, category, COALESCE(subject, 'GENERAL'), COALESCE(content, ''), COALESCE(question_type, 'NONE'), COALESCE(answer, ''), COALESCE(questions, '[]'), score_value, target_account, COALESCE(due_time, '') FROM task_templates WHERE family_id = ? AND task_type IN ('DAILY', 'TEAM') AND enabled = 1`, familyID)
 	if err != nil {
 		return err
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var templateID int64
-		var name, typ, cat, subject, content, questionType, answer, target, dueTime string
+		var name, typ, cat, subject, content, questionType, answer, questionsRaw, target, dueTime string
 		var score int
-		if err := rows.Scan(&templateID, &name, &typ, &cat, &subject, &content, &questionType, &answer, &score, &target, &dueTime); err != nil {
+		if err := rows.Scan(&templateID, &name, &typ, &cat, &subject, &content, &questionType, &answer, &questionsRaw, &score, &target, &dueTime); err != nil {
 			continue
 		}
 		var exists int
 		_ = s.repo.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM task_instances WHERE child_id = ? AND template_id = ? AND task_date = DATE('now', 'localtime')`, childID, templateID).Scan(&exists)
 		if exists == 0 {
-			_, err = s.repo.DB.ExecContext(ctx, `INSERT INTO task_instances(child_id, template_id, task_name, task_type, category, subject, content, question_type, answer, score_value, target_account, task_date, due_at) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, DATE('now', 'localtime'), CASE WHEN ? <> '' THEN DATETIME(DATE('now', 'localtime') || ' ' || ?) ELSE NULL END)`, childID, templateID, name, typ, cat, subject, content, questionType, answer, score, target, dueTime, dueTime)
+			_, err = s.repo.DB.ExecContext(ctx, `INSERT INTO task_instances(child_id, template_id, task_name, task_type, category, subject, content, question_type, answer, questions, score_value, target_account, task_date, due_at) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, DATE('now', 'localtime'), CASE WHEN ? <> '' THEN DATETIME(DATE('now', 'localtime') || ' ' || ?) ELSE NULL END)`, childID, templateID, name, typ, cat, subject, content, questionType, answer, questionsRaw, score, target, dueTime, dueTime)
 			if err != nil {
 				return err
 			}
