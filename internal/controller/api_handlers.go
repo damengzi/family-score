@@ -570,6 +570,16 @@ func (c *Controller) Backups(w http.ResponseWriter, r *http.Request, sess protoc
 	writeJSON(w, http.StatusOK, map[string]any{"backups": backups})
 }
 
+// NetworkInfo 返回局域网访问信息，用于家庭共享场景。
+func (c *Controller) NetworkInfo(w http.ResponseWriter, r *http.Request, sess protocol.Session) {
+	info, err := c.svc.NetworkInfo(r.Context(), sess)
+	if err != nil {
+		errorJSON(w, http.StatusForbidden, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, info)
+}
+
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)

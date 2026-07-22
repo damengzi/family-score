@@ -3,6 +3,7 @@ package router
 import (
 	"embed"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -20,6 +21,7 @@ func New(ctrl *controller.Controller, staticFiles embed.FS) *gin.Engine {
 	r := gin.New()
 	r.Use(zapGinLogger())
 	r.Use(gin.Recovery())
+	r.Use(originGuard())
 
 	r.GET("/", serveEmbeddedFile(staticFiles, "web/index.html", "text/html; charset=utf-8"))
 	r.GET("/favicon.svg", serveEmbeddedFile(staticFiles, "web/favicon.svg", "image/svg+xml; charset=utf-8"))
@@ -198,6 +200,8 @@ func dispatchAPI(ctrl *controller.Controller, c *gin.Context) {
 		ctrl.Backup(w, r, sess)
 	case path == "system/backups" && r.Method == http.MethodGet:
 		ctrl.Backups(w, r, sess)
+	case path == "system/network" && r.Method == http.MethodGet:
+		ctrl.NetworkInfo(w, r, sess)
 	default:
 		c.JSON(http.StatusNotFound, gin.H{"error": "接口不存在"})
 	}
@@ -206,4 +210,41 @@ func dispatchAPI(ctrl *controller.Controller, c *gin.Context) {
 func parseID(s string) int64 {
 	id, _ := strconv.ParseInt(s, 10, 64)
 	return id
+}
+
+// originGuard 校验写操作的请求来源，防止局域网共享后被其他网站跨站提交表单。
+// 浏览器同源请求会携带 Origin 或 Referer 头，要求其中的主机部分与本次请求一致；
+// 无 Origin/Referer 的请求（如脚本、本机工具）视为可信放行。
+func originGuard() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		m := c.Request.Method
+		if m == http.MethodGet || m == http.MethodHead || m == http.MethodOptions {
+			c.Next()
+			return
+		}
+		if !strings.HasPrefix(c.Request.URL.Path, "/api/") {
+			c.Next()
+			return
+		}
+		if !sameOriginRequest(c.Request) {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "请求来源校验失败，请从系统页面内操作"})
+			return
+		}
+		c.Next()
+	}
+}
+
+func sameOriginRequest(r *http.Request) bool {
+	source := r.Header.Get("Origin")
+	if source == "" {
+		source = r.Header.Get("Referer")
+	}
+	if source == "" {
+		return true
+	}
+	u, err := url.Parse(source)
+	if err != nil || u.Host == "" {
+		return false
+	}
+	return strings.EqualFold(u.Host, r.Host)
 }

@@ -159,6 +159,8 @@ function bindEvents() {
   document.querySelectorAll('[data-reject-order]').forEach(b => b.onclick = async () => { try { await api(`/api/exchange-orders/${b.dataset.rejectOrder}/audit`, {method:'POST', body:{result:'REJECTED', auditNote:'驳回'}}); toast(tr('toastExchangeRejected','兑换已驳回')); await loadAll(); } catch(err) { toast(err.message); } });
   const backupBtn = document.getElementById('backupBtn');
   if (backupBtn) backupBtn.onclick = async () => { try { const data = await api('/api/system/backup', {method:'POST', body:{}}); toast(`备份完成：${data.filePath}`); } catch(err) { toast(err.message); } };
+  const networkInfoBox = document.getElementById('networkInfoBox');
+  if (networkInfoBox) loadNetworkInfo(networkInfoBox);
 }
 
 function fillScorePreset(btn) {

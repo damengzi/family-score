@@ -23,3 +23,10 @@ logs/
 # Temp
 tmp/
 .temp/
+
+# Android 构建产物（壳工程源码保留，产物不提交）
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/app/src/main/jniLibs/

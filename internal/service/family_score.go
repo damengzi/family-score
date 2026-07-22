@@ -24,6 +24,7 @@ type Service struct {
 	repo             *repository.Repository
 	sessions         map[string]protocol.Session
 	passwordCaptchas map[string]passwordCaptchaSession
+	listenAddr       string
 	mu               sync.Mutex
 }
 
@@ -41,6 +42,17 @@ func (s *Service) DataDir() string { return s.repo.DataDir }
 
 // DBPath 返回 SQLite 文件路径。
 func (s *Service) DBPath() string { return s.repo.DBPath }
+
+// SetListenAddr 记录服务实际监听地址，供状态和网络信息查询使用。
+func (s *Service) SetListenAddr(addr string) { s.listenAddr = addr }
+
+// ListenAddr 返回服务实际监听地址。
+func (s *Service) ListenAddr() string {
+	if s.listenAddr == "" {
+		return "127.0.0.1:8080"
+	}
+	return s.listenAddr
+}
 
 type SystemStatusParam = protocol.SystemStatusParam
 type SetupInitParam = protocol.SetupInitParam
@@ -60,7 +72,7 @@ func (s *Service) SystemStatus(ctx context.Context) (SystemStatusParam, error) {
 	if err := s.repo.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM users`).Scan(&userCount); err != nil {
 		return SystemStatusParam{}, err
 	}
-	return SystemStatusParam{SetupCompleted: userCount > 0, DataDir: s.repo.DataDir, DBPath: s.repo.DBPath, Addr: "127.0.0.1:8080", Now: time.Now().Format(time.RFC3339)}, nil
+	return SystemStatusParam{SetupCompleted: userCount > 0, DataDir: s.repo.DataDir, DBPath: s.repo.DBPath, Addr: s.ListenAddr(), Now: time.Now().Format(time.RFC3339)}, nil
 }
 
 // SelfRegister 自主注册普通用户。

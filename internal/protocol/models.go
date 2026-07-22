@@ -218,6 +218,16 @@ type SystemStatusParam struct {
 	Now            string `json:"now"`
 }
 
+// NetworkInfo 表示本机局域网访问信息。
+type NetworkInfo struct {
+	ListenAddr   string   `json:"listenAddr"`
+	Port         string   `json:"port"`
+	ShareEnabled bool     `json:"shareEnabled"`
+	URLs         []string `json:"urls"`
+	PrimaryURL   string   `json:"primaryUrl"`
+	QRPngBase64  string   `json:"qrPngBase64"`
+}
+
 // Profile 表示当前登录用户的个人主页基础信息。
 type Profile struct {
 	User             User   `json:"user"`

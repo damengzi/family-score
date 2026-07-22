@@ -38,6 +38,9 @@ func main() {
 	addr := os.Getenv("FAMILY_SCORE_ADDR")
 	if addr == "" {
 		addr = "127.0.0.1:8080"
+		if os.Getenv("FAMILY_SCORE_LAN") == "1" {
+			addr = "0.0.0.0:8080"
+		}
 	}
 
 	lg, err := logger.Init(dataDir)
@@ -58,6 +61,7 @@ func main() {
 		lg.Fatal("数据层初始化失败", zap.Error(err))
 	}
 	svc := service.New(repo)
+	svc.SetListenAddr(addr)
 	if err := svc.EnsureBuiltinAdmin(context.Background()); err != nil {
 		lg.Fatal("固定管理员账号初始化失败", zap.Error(err))
 	}

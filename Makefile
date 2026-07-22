@@ -1,4 +1,4 @@
-.PHONY: build run clean
+.PHONY: build run clean dist
 
 APP_NAME ?= family-score
 BIN_DIR ?= bin
@@ -15,5 +15,8 @@ build:
 run: build
 	FAMILY_SCORE_ADDR=$(ADDR) FAMILY_SCORE_DATA_DIR=$(DATA_DIR) ./$(BIN_PATH)
 
+dist:
+	bash scripts/build-dist.sh
+
 clean:
-	rm -rf $(BIN_DIR)
+	rm -rf $(BIN_DIR) dist
